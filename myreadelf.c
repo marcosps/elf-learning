@@ -105,7 +105,7 @@ static void show_ident()
 		 * data
 		 * */
 		is64bit = true;
-		ret = read(fd, elf_header + 52, 8);
+		ret = read(fd, elf_header + 52, 12);
 		if (ret == -1)
 			errx(1, "read");
 	}
@@ -183,7 +183,6 @@ static void show_header_fields()
 	pos += 2;
 	show_var_field("Size of section headers (bytes)", pos, 2, false);
 
-	// TODO: these two fields are zeroed
 	// e_shnum
 	pos += 2;
 	show_var_field("Number of section headers", pos, 2, false);
