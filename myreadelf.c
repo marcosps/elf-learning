@@ -17,11 +17,42 @@ static bool is64bit = false;
 
 static unsigned char *prog_header;
 
-static char* prog_type[] = {
-	"",
-	"LOAD",
-};
-
+static char *get_prog_type(int type)
+{
+	if (type == 0)
+		return "NULL";
+	else if (type == 1)
+		return "LOAD";
+	else if (type == 2)
+		return "DYNAMIC";
+	else if (type == 3)
+		return "INTEROP";
+	else if (type == 4)
+		return "NOTE";
+	else if (type == 5)
+		return "SHLIB";
+	else if (type == 6)
+		return "PHDR";
+	else if (type == 7)
+		return "TLS";
+	else if (type == 0x60000000)
+		return "LOOS";
+	else if (type == 0x6FFFFFFF)
+		return "HIOS";
+	// begin Defined in elf.h
+	else if (type == 0x6474e550)
+		return "GNU_EH_FRAME";
+	else if (type == 0x6474e551)
+		return "GNU_STACK";
+	else if (type == 0x6474e552)
+		return "GNU_RELRO";
+	// enf defined by elf.h
+	else if (type == 0x70000000)
+		return "LOPROC";
+	else if (type == 0x7FFFFFFF)
+		return "HIPROC";
+	return "UNKONWN";
+}
 
 /* Prints the entry point, ph offset and sh offset */
 static uint64_t show_var_fields(char *msg, unsigned char *buf, size_t offset,
@@ -183,7 +214,7 @@ static void show_prog_header()
 	/* Type is 4 bytes both in 32 and 64 bit */
 	// p_type
 	type = get_prog_field(pos, 4, false);
-	printf("Type: %s\n", prog_type[type]);
+	printf("Type: %s\n", get_prog_type(type));
 	pos += 4;
 
 	/* On 64 bit, the flags field comes after the type */
