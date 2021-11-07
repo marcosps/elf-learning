@@ -27,11 +27,15 @@ static unsigned char *section_header;
 
 struct sh_entry {
 	int sh_name;
-	int sh_type;
+	uint64_t sh_type;
 	int sh_flags;
 	int sh_addr;
 	int sh_offset;
 	int sh_size;
+	int sh_link;
+	int sh_info;
+	int sh_addralign;
+	int sh_entsize;
 };
 
 static char *get_prog_type(int type)
@@ -69,6 +73,84 @@ static char *get_prog_type(int type)
 	else if (type == 0x7FFFFFFF)
 		return "HIPROC";
 	return "UNKONWN";
+}
+
+static char *get_section_type(uint64_t type)
+{
+	if (type == 0)
+		return "NULL";
+	else if (type == 1)
+		return "PROGBITS";
+	else if (type == 2)
+		return "SYMTAB";
+	else if (type == 3)
+		return "STRTAB";
+	else if (type == 4)
+		return "RELA";
+	else if (type == 5)
+		return "HASH";
+	else if (type == 6)
+		return "DYNAMIC";
+	else if (type == 7)
+		return "NOTE";
+	else if (type == 8)
+		return "NOBITS";
+	else if (type == 9)
+		return "REL";
+	else if (type == 10)
+		return "SHLIB";
+	else if (type == 11)
+		return "DYNLIB";
+	else if (type == 12)
+		return "INIT_ARRAY";
+	else if (type == 13)
+		return "FINI_ARRAY";
+	else if (type == 14)
+		return "PREINIT_ARRAY";
+	else if (type == 15)
+		return "GROUP";
+	else if (type == 16)
+		return "SYMTAB_SHNDX";
+	else if (type == 17)
+		return "NUM";
+	else if (type == 0x60000000)
+		return "LOOS";
+	// begin defined in /usr/include/elf.h
+	else if (type == 0x6ffffff5)
+	       return "GNU_ATTRIBUTES";
+	else if (type == 0x6ffffff6)
+		return "GNU_HASH";
+	else if (type == 0x6ffffff7)
+		return "GNU_LIBLIST";
+	else if (type == 0x6ffffff8)
+		return "CHECKSUM";
+	else if (type == 0x6ffffffa)
+		return "LOSUNW";
+	else if (type == 0x6ffffffa)
+		return "SUNW_move";
+	else if (type == 0x6ffffffb)
+		return "SUNW_COMDAT";
+	else if (type == 0x6ffffffc)
+		return "SUNW_syminfo";
+	else if (type == 0x6ffffffd)
+		return "GNU_verdef";
+	else if (type == 0x6ffffffe)
+		return "GNU_verneed";
+	else if (type == 0x6fffffff)
+		return "GNU_versym";
+	else if (type == 0x6fffffff)
+		return "HISUNW";
+	else if (type == 0x6fffffff)
+		return "HIOS";
+	else if (type == 0x70000000)
+		return "LOPROC";
+	else if (type == 0x7fffffff)
+		return "HIPROC";
+	else if (type == 0x80000000)
+		return "LOUSER";
+	else if (type == 0x8fffffff)
+		return "HIUSER";
+	return "UNKNOWN";
 }
 
 /* Prints the entry point, ph offset and sh offset */
@@ -229,6 +311,40 @@ static void show_prog_flags(int pos)
 				flags & 0x1 ? 'E' : ' ');
 }
 
+static void get_section_flag(uint64_t flags, char *flag_buf)
+{
+	int pos = 0;
+
+	if (flags & 0x1) /* SHF_WRITE */
+		flag_buf[pos++] = 'W';
+	if (flags & 0x2) /* SHF_ALLOC */
+		flag_buf[pos++] = 'A';
+	if (flags & 0x4) /* SHF_EXECINSTR */
+		flag_buf[pos++] = 'X';
+	if (flags & 0x10) /* SHF_MERGE */
+		flag_buf[pos++] = 'M';
+	if (flags & 0x20) /* SHF_STRINGS */
+		flag_buf[pos++] = 'S';
+	if (flags & 0x40) /* SHF_INFO_LINK */
+		flag_buf[pos++] = 'I';
+	if (flags & 0x80) /* SHF_LINK_ORDER */
+		flag_buf[pos++] = 'L';
+	if (flags & 0x100) /* SHF_OS_NONCONFORMING */
+		flag_buf[pos++] = 'O';
+	if (flags & 0x200) /* SHF_GROUP */
+		flag_buf[pos++] = 'G';
+	if (flags & 0x400) /* SHF_TLS */
+		flag_buf[pos++] = 'T';
+	if (flags & 0x0ff00000) /* SHF_MASKOS */
+		flag_buf[pos++] = '?'; //FIXME
+	if (flags & 0xf0000000) /* SHF_MASKPROC */
+		flag_buf[pos++] = '?'; //FIXME
+	if (flags & 0x4000000) /* SHF_ORDERED */
+		flag_buf[pos++] = 'O';
+	if (flags & 0x8000000) /* SHF_EXCLUDE */
+		flag_buf[pos++] = 'E';
+}
+
 static void show_prog_header()
 {
 	size_t nbytes = is64bit ? 8 : 4;
@@ -330,6 +446,18 @@ static void show_section_header(struct sh_entry *entry)
 
 	pos += nbytes;
 	entry->sh_size = get_section_field(pos, nbytes);
+
+	pos += nbytes;
+	entry->sh_link = get_section_field(pos, 4);
+
+	pos += 4;
+	entry->sh_info = get_section_field(pos, 4);
+
+	pos += 4;
+	entry->sh_addralign = get_section_field(pos, nbytes);
+
+	pos += nbytes;
+	entry->sh_entsize = get_section_field(pos, nbytes);
 }
 
 static void show_section_headers()
@@ -382,11 +510,21 @@ static void show_section_headers()
 
 	/* Print section header data */
 	for (i = 0; i < sh_num; i++) {
-		printf("Section name: %s\n", shstrtab_data + entries[i].sh_name);
-		printf("String name offset: %d\n", entries[i].sh_name);
-		printf("Section offset: %d\n", entries[i].sh_offset);
-		printf("Section Type: %d\n", entries[i].sh_type);
-		printf("\n");
+		char flag_buf[15] = {};
+		get_section_flag(entries[i].sh_flags, flag_buf);
+
+		printf("\tNr: [%4lu]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
+				i,
+				shstrtab_data + entries[i].sh_name,
+				get_section_type(entries[i].sh_type),
+				entries[i].sh_addr,
+				entries[i].sh_offset,
+				entries[i].sh_size,
+				entries[i].sh_entsize,
+				flag_buf,
+				entries[i].sh_link,
+				entries[i].sh_info,
+				entries[i].sh_addralign);
 	}
 
 	free(shstrtab_data);
