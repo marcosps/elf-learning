@@ -488,8 +488,7 @@ static void show_section_headers()
 	if (!section_header)
 		errx(1, "malloc section_header");
 
-	printf("Section Header Table\n");
-	printf("====================\n");
+	printf("Section Headers:\n");
 
 	/* Seek to the start of the section header table */
 	lseek(fd, sh_off, SEEK_SET);
@@ -525,7 +524,7 @@ static void show_section_headers()
 		char flag_buf[15] = {};
 		get_section_flag(entries[i].sh_flags, flag_buf);
 
-		printf("\tNr: [%4lu]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
+		printf("  Nr: [%4lu]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
 				i,
 				shstrtab_data + entries[i].sh_name,
 				get_section_type(entries[i].sh_type),
