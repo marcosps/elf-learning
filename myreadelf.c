@@ -38,6 +38,17 @@ struct sh_entry {
 	int sh_entsize;
 };
 
+struct ph_entry {
+	int p_type;
+	int p_flags;
+	uint64_t p_offset;
+	uint64_t p_vaddr;
+	uint64_t p_paddr;
+	uint64_t p_filesz;
+	uint64_t p_memsz;
+	uint64_t p_align;
+};
+
 static char *get_prog_type(int type)
 {
 	if (type == 0)
@@ -181,11 +192,6 @@ static uint64_t show_var_field(char *msg, size_t offset, size_t nbytes, bool hex
 	return show_var_fields(msg, elf_header, offset, nbytes, hex, true);
 }
 
-static uint64_t show_prog_field(char *msg, size_t offset, size_t nbytes, bool hex)
-{
-	return show_var_fields(msg, prog_header, offset, nbytes, hex, true);
-}
-
 static uint64_t get_prog_field(size_t offset, size_t nbytes)
 {
 	return show_var_fields("", prog_header, offset, nbytes, false, false);
@@ -301,14 +307,11 @@ static void show_header_fields()
 	printf("\n");
 }
 
-static void show_prog_flags(int pos)
+static void get_prog_flags(uint64_t flags, char *flag_buf)
 {
-	uint64_t flags;
-	// p_flags
-	flags = get_prog_field(pos, 4);
-	printf("Flags: %c%c%c\n", flags & 0x4 ? 'R' : ' ',
-				flags & 0x2 ? 'W' : ' ',
-				flags & 0x1 ? 'E' : ' ');
+	flag_buf[0] = flags & 0x4 ? 'R' : ' ';
+	flag_buf[1] = flags & 0x2 ? 'W' : ' ';
+	flag_buf[2] = flags & 0x1 ? 'E' : ' ';
 }
 
 static void get_section_flag(uint64_t flags, char *flag_buf)
@@ -345,58 +348,50 @@ static void get_section_flag(uint64_t flags, char *flag_buf)
 		flag_buf[pos++] = 'E';
 }
 
-static void show_prog_header()
+static void show_prog_header(struct ph_entry *entry)
 {
 	size_t nbytes = is64bit ? 8 : 4;
 	size_t pos = 0;
-	int type;
 
 	/* Type is 4 bytes both in 32 and 64 bit */
-	// p_type
-	type = get_prog_field(pos, 4);
-	printf("Type: %s\n", get_prog_type(type));
+	entry->p_type = get_prog_field(pos, 4);
 	pos += 4;
 
 	/* On 64 bit, the flags field comes after the type */
 	if (is64bit) {
-		show_prog_flags(pos);
+		entry->p_flags = get_prog_field(pos, 4);
 		pos += 4;
 	}
 
-	// p_offset
-	show_prog_field("Offset", pos, nbytes, true);
+	entry->p_offset = get_prog_field(pos, nbytes);
 	pos += nbytes;
 
-	// p_vaddr
-	show_prog_field("VirtAddr", pos, nbytes, true);
+	entry->p_vaddr = get_prog_field(pos, nbytes);
 	pos += nbytes;
 
-	// p_paddr
-	show_prog_field("PhysAddr", pos, nbytes, true);
+	entry->p_paddr = get_prog_field(pos, nbytes);
 	pos += nbytes;
 
-	// p_filesz
-	show_prog_field("FileSize (bytes)", pos, nbytes, false);
+	entry->p_filesz = get_prog_field(pos, nbytes);
 	pos += nbytes;
 
-	show_prog_field("MemSize (bytes)", pos, nbytes, false);
+	entry->p_memsz = get_prog_field(pos, nbytes);
 	pos += nbytes;
 
 	/* On 32bit, the flag field exists after the MemSize */
 	if (!is64bit) {
-		show_prog_flags(pos);
+		entry->p_flags = get_prog_field(pos, 4);
 		pos += 4;
 	}
 
-	show_prog_field("Align", pos, nbytes, true);
-
-	printf("\n");
+	entry->p_align = get_prog_field(pos, nbytes);
 }
 
 static void show_program_headers()
 {
 	int ret;
 	uint64_t i;
+	struct ph_entry entries[ph_num];
 
 	/* return if the file does not contain a program header table */
 	if (ph_off == 0)
@@ -406,8 +401,7 @@ static void show_program_headers()
 	if (!prog_header)
 		errx(1, "malloc prog_header");
 
-	printf("Program Header Table\n");
-	printf("====================\n");
+	printf("Program Header:\n");
 
 	// seek to program header offset (it's not _needed_ but let's do it
 	// anyway)
@@ -421,8 +415,26 @@ static void show_program_headers()
 		ret = read(fd, prog_header, ph_size);
 		if (ret == -1)
 			errx(1, "prog header");
-		show_prog_header();
+		show_prog_header(&entries[i]);
 	}
+
+	for (i = 0; i < ph_num; i++) {
+		char flag_buf[4] = {};
+
+		get_prog_flags(entries[i].p_flags, flag_buf);
+		printf("  Type: %20s\tOffset: 0x%lx\tVirtAddr: 0x%lx\tPhysAddr: 0x%lx\tFileSz (bytes): %lu\tMemSz (bytes): %lu\tFlags: %s"
+				"\n",
+				get_prog_type(entries[i].p_type),
+				entries[i].p_offset,
+				entries[i].p_vaddr,
+				entries[i].p_paddr,
+				entries[i].p_filesz,
+				entries[i].p_memsz,
+				flag_buf
+		      );
+	}
+
+	printf("\n");
 
 	free(prog_header);
 }
