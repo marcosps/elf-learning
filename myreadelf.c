@@ -25,6 +25,9 @@ static unsigned char elf_header[64];
 static unsigned char *prog_header;
 static unsigned char *section_header;
 
+static unsigned int modinfo_off;
+static unsigned int modinfo_len;
+
 struct sh_entry {
 	int sh_name;
 	uint64_t sh_type;
@@ -522,11 +525,21 @@ static void show_section_headers()
 	/* Print section header data */
 	for (i = 0; i < sh_num; i++) {
 		char flag_buf[15] = {};
+		char *sec_name = (char *)(shstrtab_data + entries[i].sh_name);
 		get_section_flag(entries[i].sh_flags, flag_buf);
+
+		/*
+		 * Record .modinfo off and len if we are dealing with a kernel
+		 * module.
+		 */
+		if (strncmp(sec_name, ".modinfo", 8) == 0) {
+			modinfo_off = entries[i].sh_offset;
+			modinfo_len = entries[i].sh_size;
+		}
 
 		printf("  Nr: [%4lu]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
 				i,
-				shstrtab_data + entries[i].sh_name,
+				sec_name,
 				get_section_type(entries[i].sh_type),
 				entries[i].sh_addr,
 				entries[i].sh_offset,
@@ -542,6 +555,20 @@ static void show_section_headers()
 	free(section_header);
 }
 
+static void show_modinfo()
+{
+	char modinfo_data[modinfo_len];
+	unsigned int cur_len = 0;
+
+	pread(fd, modinfo_data, modinfo_len , modinfo_off);
+
+	printf("\nModule Info:\n");
+
+	do {
+		cur_len += printf("%s\n", modinfo_data + cur_len);
+	} while (cur_len < modinfo_len);
+}
+
 int main(int argc, char **argv)
 {
 	if (argc != 2)
@@ -554,6 +581,12 @@ int main(int argc, char **argv)
 	show_header_fields();
 	show_program_headers();
 	show_section_headers();
+
+	printf("mod off %u mod len %u\n", modinfo_off, modinfo_len);
+
+	/* Show the module info if the ELF file is a Linux module */
+	if (modinfo_off > 0 && modinfo_len > 0)
+		show_modinfo();
 
 	close(fd);
 
