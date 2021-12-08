@@ -5,6 +5,7 @@
 #include <stdlib.h> //strtoull
 #include <string.h> // memcpy
 #include <inttypes.h> //uint64_t
+#include <sys/param.h> //MAX
 #include <sys/types.h> //lseek
 #include <unistd.h> //close
 
@@ -306,8 +307,6 @@ static void show_header_fields()
 	// e_shstrndx
 	pos += 2;
 	sh_strndx = show_var_field("Section header string table index", pos, 2, false);
-
-	printf("\n");
 }
 
 static void get_prog_flags(uint64_t flags, char *flag_buf)
@@ -404,8 +403,6 @@ static void show_program_headers()
 	if (!prog_header)
 		errx(1, "malloc prog_header");
 
-	printf("Program Header:\n");
-
 	// seek to program header offset (it's not _needed_ but let's do it
 	// anyway)
 	lseek(fd, ph_off, SEEK_SET);
@@ -419,8 +416,19 @@ static void show_program_headers()
 		if (ret == -1)
 			errx(1, "prog header");
 		show_prog_header(&entries[i]);
+
+		/* Get interp info */
+		if (entries[i].p_type == 3) {
+			size_t len = MAX(entries[i].p_filesz,
+						entries[i].p_memsz);
+			char interp[len];
+
+			pread(fd, interp, len, entries[i].p_offset);
+			printf("Interpreter: %s\n", interp);
+		}
 	}
 
+	printf("\nProgram Headers:\n");
 	for (i = 0; i < ph_num; i++) {
 		char flag_buf[4] = {};
 
