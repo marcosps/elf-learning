@@ -590,8 +590,6 @@ int main(int argc, char **argv)
 	show_program_headers();
 	show_section_headers();
 
-	printf("mod off %u mod len %u\n", modinfo_off, modinfo_len);
-
 	/* Show the module info if the ELF file is a Linux module */
 	if (modinfo_off > 0 && modinfo_len > 0)
 		show_modinfo();
