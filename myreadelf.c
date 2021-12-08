@@ -87,7 +87,7 @@ static char *get_prog_type(int type)
 		return "LOPROC";
 	else if (type == 0x7FFFFFFF)
 		return "HIPROC";
-	return "UNKONWN";
+	return "UNKNOWN";
 }
 
 static char *get_section_type(uint64_t type)
@@ -589,8 +589,6 @@ int main(int argc, char **argv)
 	show_header_fields();
 	show_program_headers();
 	show_section_headers();
-
-	printf("mod off %u mod len %u\n", modinfo_off, modinfo_len);
 
 	/* Show the module info if the ELF file is a Linux module */
 	if (modinfo_off > 0 && modinfo_len > 0)
