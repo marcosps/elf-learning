@@ -26,8 +26,6 @@ static uint64_t sh_strndx;
 
 static bool is64bit = false;
 
-static unsigned char *section_header;
-
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
 
@@ -205,7 +203,7 @@ static uint64_t get_prog_field(size_t offset, size_t nbytes)
 
 static uint64_t get_section_field(size_t offset, size_t nbytes)
 {
-	return show_var_fields("", section_header, offset, nbytes, false, false);
+	return show_var_fields("", mfile, offset, nbytes, false, false);
 }
 
 /* The meaning of each index in described in the ELF Header documentation. */
@@ -416,15 +414,17 @@ static void show_program_headers()
 	printf("\n");
 }
 
-static void show_section_header(struct sh_entry *entry)
+static void show_section_header(size_t sh_index, struct sh_entry *entry)
 {
 	int nbytes = is64bit ? 8 : 4;
-	int pos;
+	int pos = sh_off + (sh_index * sh_size);
 
-	entry->sh_name = get_section_field(0, 4);
-	entry->sh_type = get_section_field(4, 4);
+	entry->sh_name = get_section_field(pos, 4);
 
-	pos = 8;
+	pos += 4;
+	entry->sh_type = get_section_field(pos, 4);
+
+	pos += 4;
 	entry->sh_flags = get_section_field(pos, nbytes);
 
 	pos += nbytes;
@@ -453,53 +453,33 @@ static void show_section_headers()
 {
 	struct sh_entry entries[sh_num];
 	uint64_t shstrtab_off;
-	uint64_t shstrtab_size;
-	unsigned char *shstrtab_data;
 	size_t i;
 
 	 /* return if the file does not contain a section header table */
 	if (sh_off == 0)
 		return;
 
-	section_header = malloc(sh_size);
-	if (!section_header)
-		errx(1, "malloc section_header");
-
 	printf("Section Headers:\n");
-
-	/* Seek to the start of the section header table */
-	lseek(fd, sh_off, SEEK_SET);
 
 	/*
 	 * Load the values of the section header into entries to print them
 	 * later
 	 */
 	for (i = 0; i < sh_num; i++) {
-		int ret = read(fd, section_header, sh_size);
-		if (ret == -1)
-			errx(1, "section header");
-		show_section_header(&entries[i]);
+		show_section_header(i, &entries[i]);
 
 		/*
 		 * Store the segment pointed by the shstrtab segment headers.
 		 * It will be needed later to get all the section header names.
 		 */
-		if (sh_strndx == i) {
-			shstrtab_off = entries[i].sh_offset;
-			shstrtab_size = entries[i].sh_size;
-		}
+		if (sh_strndx == i)
+			shstrtab_off = (uint64_t)(mfile + entries[i].sh_offset);
 	}
-
-	shstrtab_data = malloc(shstrtab_size);
-	if (!shstrtab_data)
-		errx(1, "malloc shstrtab_data");
-
-	pread(fd, shstrtab_data, shstrtab_size, shstrtab_off);
 
 	/* Print section header data */
 	for (i = 0; i < sh_num; i++) {
 		char flag_buf[15] = {};
-		char *sec_name = (char *)(shstrtab_data + entries[i].sh_name);
+		char *sec_name = (char *)(shstrtab_off + entries[i].sh_name);
 		get_section_flag(entries[i].sh_flags, flag_buf);
 
 		/*
@@ -524,9 +504,6 @@ static void show_section_headers()
 				entries[i].sh_info,
 				entries[i].sh_addralign);
 	}
-
-	free(shstrtab_data);
-	free(section_header);
 }
 
 static void show_modinfo()
