@@ -14,20 +14,34 @@
 static unsigned char *mfile;
 
 static int fd;
-static uint64_t ph_off;
-static uint64_t ph_size;
-static uint64_t ph_num;
-
-static uint64_t sh_off;
-static uint64_t sh_size;
-static uint64_t sh_num;
-
-static uint64_t sh_strndx;
 
 static bool is64bit = false;
+/* Some fields use 8 bytes when in 64bit ELF files */
+static char nbytes;
 
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
+
+#define EI_NIDENT 16
+
+struct elf_header {
+	unsigned char e_ident[EI_NIDENT];
+	int e_type;
+	int e_machine;
+	int e_version;
+	uint64_t e_entry;
+	uint64_t e_phoff;
+	uint64_t e_shoff;
+	int e_flags;
+	int e_ehsize;
+	int e_phentsize;
+	int e_phnum;
+	int e_shentsize;
+	int e_shnum;
+	int e_shstrndx;
+};
+
+static struct elf_header eh;
 
 struct sh_entry {
 	int sh_name;
@@ -169,126 +183,90 @@ static char *get_section_type(uint64_t type)
 }
 
 /* Prints the entry point, ph offset and sh offset */
-static uint64_t show_var_fields(char *msg, unsigned char *buf, size_t offset,
-				size_t nbytes, bool hex, bool print)
+static uint64_t get_field(size_t offset, size_t len)
 {
 	unsigned char data[9] = {0};
 	/* Big enough to store 32 and 64 bit values */
 	uint64_t val;
 
-	memcpy(data, buf + offset, nbytes);
+	memcpy(data, mfile + offset, len);
 	/* TODO: How to convert it by using glibc? */
 	val = *(uint64_t *)data;
-
-	if (!print)
-		return val;
-
-	if (hex)
-		printf("%s: 0x%lx\n", msg, val);
-	else
-		printf("%s: %lu\n", msg, val);
 
 	return val;
 }
 
-static uint64_t show_var_field(char *msg, size_t offset, size_t nbytes, bool hex)
-{
-	return show_var_fields(msg, mfile, offset, nbytes, hex, true);
-}
-
-static uint64_t get_prog_field(size_t offset, size_t nbytes)
-{
-	return show_var_fields("", mfile, offset, nbytes, false, false);
-}
-
-static uint64_t get_section_field(size_t offset, size_t nbytes)
-{
-	return show_var_fields("", mfile, offset, nbytes, false, false);
-}
-
-/* The meaning of each index in described in the ELF Header documentation. */
-static void show_ident()
-{
-	printf("Magic numbers: %#0x - %c%c%c\n", mfile[0], mfile[1], mfile[2], mfile[3]);
-
-	/* If the file is an 64bit ELF file, read the additional 8 bytes */
-	if (mfile[4] == 2) {
-		/*
-		 * store the additional data at the end of the previously read
-		 * data
-		 * */
-		is64bit = true;
-	}
-
-	printf("The ELF file was compiled for %s endian machines\n", mfile[5] == 1 ? "little" : "big");
-	// mfile[6] == ELF version, which is always 1 == current
-	printf("OS ABI: 0x%d (0 == System V)\n", mfile[7]);
-	// mfile[8] == ABIVERSION, which we don't care
-	// mfile[9-15] == UNUSED == EI_PAD
-}
-
 static void show_header_fields()
 {
-	size_t nbytes;
-	size_t pos;
+	size_t pos = 16;
 
 	if (mfile[0] != 0x7f)
 		errx(1, "Not an ELF file");
 
-	printf("ELF Header\n");
-	printf("==========\n");
+	if (mfile[4] == 2)
+		is64bit = true;
 
-	show_ident();
+	eh.e_type = get_field(pos, 2);
 
-	// e_type
-	show_var_field("Object type", 16, 2, true);
-	// e_machine
-	show_var_field("ISA", 18, 2, true);
-	// e_version
-	show_var_field("ELF version", 20, 4, false);
+	pos += 2;
+	eh.e_machine = get_field(pos, 2);
+
+	pos += 2;
+	eh.e_version = get_field(pos, 4);
 
 	/* The number of bytes of some fields in the Elf Header. */
 	nbytes = is64bit ? 8 : 4;
 
-	pos = 24;
-	// e_entry
-	show_var_field("Entry point", pos, nbytes, true);
-
-	// e_phoff
-	pos += nbytes;
-	ph_off = show_var_field("Program header offset (bytes)", pos, nbytes, false);
-
-	// e_shoff
-	pos += nbytes;
-	sh_off = show_var_field("Section header offset (bytes)", pos, nbytes, false);
-
-	// e_flags
-	pos += nbytes;
-	show_var_field("Flags: ", pos, 4, true);
-
-	// e_ehsize
 	pos += 4;
-	show_var_field("Size of this header (bytes) ", pos, 2, false);
+	eh.e_entry = get_field(pos, nbytes);
 
-	// e_phentsize
-	pos += 2;
-	ph_size = show_var_field("Size of program header (bytes) ", pos, 2, false);
+	pos += nbytes;
+	eh.e_phoff = get_field(pos, nbytes);
 
-	// e_phnum
-	pos += 2;
-	ph_num = show_var_field("Number of program headers", pos, 2, false);
+	pos += nbytes;
+	eh.e_shoff = get_field(pos, nbytes);
 
-	// e_shentsize
-	pos += 2;
-	sh_size = show_var_field("Size of section headers (bytes)", pos, 2, false);
+	pos += nbytes;
+	eh.e_flags = get_field(pos, 4);
 
-	// e_shnum
-	pos += 2;
-	sh_num = show_var_field("Number of section headers", pos, 2, false);
+	pos += 4;
+	eh.e_ehsize = get_field(pos, 2);
 
-	// e_shstrndx
 	pos += 2;
-	sh_strndx = show_var_field("Section header string table index", pos, 2, false);
+	eh.e_phentsize = get_field(pos, 2);
+
+	pos += 2;
+	eh.e_phnum = get_field(pos, 2);
+
+	pos += 2;
+	eh.e_shentsize = get_field(pos, 2);
+
+	pos += 2;
+	eh.e_shnum = get_field(pos, 2);
+
+	pos += 2;
+	eh.e_shstrndx = get_field(pos, 2);
+
+	printf("ELF Header\n");
+	printf("==========\n");
+
+	printf("Magic numbers: %#0x - %c%c%c\n", mfile[0], mfile[1], mfile[2], mfile[3]);
+	printf("The ELF file was compiled for %s endian machines\n", mfile[5] == 1 ? "little" : "big");
+	printf("OS ABI: 0x%d (0 == System V)\n", mfile[7]);
+
+	printf("Object type: 0x%x\n", eh.e_type);
+	printf("ISA: 0x%x\n", eh.e_machine);
+	printf("ELF version: %d\n", eh.e_version);
+	printf("Entry point: 0x%lx\n", eh.e_entry);
+	printf("Program header offset (bytes): %lu\n", eh.e_phoff);
+	printf("Section header offset (bytes): %lu\n", eh.e_shoff);
+	printf("Flags: 0x%x\n", eh.e_flags);
+	printf("Size of this header (bytes): %d\n", eh.e_ehsize);
+	printf("Size of program header (bytes): %d\n", eh.e_phentsize);
+	printf("Number of program headers: %d\n", eh.e_phnum);
+	printf("Size of section headers (bytes): %d\n", eh.e_shentsize);
+	printf("Number of section headers: %d\n", eh.e_shnum);
+	printf("Section header string table index: %d\n", eh.e_shstrndx);
 }
 
 static void get_prog_flags(uint64_t flags, char *flag_buf)
@@ -334,53 +312,52 @@ static void get_section_flag(uint64_t flags, char *flag_buf)
 
 static void show_prog_header(size_t ph_index, struct ph_entry *entry)
 {
-	size_t nbytes = is64bit ? 8 : 4;
-	size_t pos = ph_off + (ph_index * ph_size);
+	size_t pos = eh.e_phoff + (ph_index * eh.e_phentsize);
 
 	/* Type is 4 bytes both in 32 and 64 bit */
-	entry->p_type = get_prog_field(pos, 4);
+	entry->p_type = get_field(pos, 4);
 	pos += 4;
 
 	/* On 64 bit, the flags field comes after the type */
 	if (is64bit) {
-		entry->p_flags = get_prog_field(pos, 4);
+		entry->p_flags = get_field(pos, 4);
 		pos += 4;
 	}
 
-	entry->p_offset = get_prog_field(pos, nbytes);
+	entry->p_offset = get_field(pos, nbytes);
 	pos += nbytes;
 
-	entry->p_vaddr = get_prog_field(pos, nbytes);
+	entry->p_vaddr = get_field(pos, nbytes);
 	pos += nbytes;
 
-	entry->p_paddr = get_prog_field(pos, nbytes);
+	entry->p_paddr = get_field(pos, nbytes);
 	pos += nbytes;
 
-	entry->p_filesz = get_prog_field(pos, nbytes);
+	entry->p_filesz = get_field(pos, nbytes);
 	pos += nbytes;
 
-	entry->p_memsz = get_prog_field(pos, nbytes);
+	entry->p_memsz = get_field(pos, nbytes);
 	pos += nbytes;
 
 	/* On 32bit, the flag field exists after the MemSize */
 	if (!is64bit) {
-		entry->p_flags = get_prog_field(pos, 4);
+		entry->p_flags = get_field(pos, 4);
 		pos += 4;
 	}
 
-	entry->p_align = get_prog_field(pos, nbytes);
+	entry->p_align = get_field(pos, nbytes);
 }
 
 static void show_program_headers()
 {
-	uint64_t i;
-	struct ph_entry entries[ph_num];
+	int i;
+	struct ph_entry entries[eh.e_phnum];
 
 	/* Return if the file does not contain a program header table */
-	if (ph_off == 0)
+	if (eh.e_phoff == 0)
 		return;
 
-	for (i = 0; i < ph_num; i++) {
+	for (i = 0; i < eh.e_phnum; i++) {
 		show_prog_header(i, &entries[i]);
 
 		/* Get interp info */
@@ -395,7 +372,7 @@ static void show_program_headers()
 	}
 
 	printf("\nProgram Headers:\n");
-	for (i = 0; i < ph_num; i++) {
+	for (i = 0; i < eh.e_phnum; i++) {
 		char flag_buf[4] = {};
 
 		get_prog_flags(entries[i].p_flags, flag_buf);
@@ -416,47 +393,46 @@ static void show_program_headers()
 
 static void show_section_header(size_t sh_index, struct sh_entry *entry)
 {
-	int nbytes = is64bit ? 8 : 4;
-	int pos = sh_off + (sh_index * sh_size);
+	int pos = eh.e_shoff + (sh_index * eh.e_shentsize);
 
-	entry->sh_name = get_section_field(pos, 4);
-
-	pos += 4;
-	entry->sh_type = get_section_field(pos, 4);
+	entry->sh_name = get_field(pos, 4);
 
 	pos += 4;
-	entry->sh_flags = get_section_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_addr = get_section_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_offset = get_section_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_size = get_section_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_link = get_section_field(pos, 4);
+	entry->sh_type = get_field(pos, 4);
 
 	pos += 4;
-	entry->sh_info = get_section_field(pos, 4);
-
-	pos += 4;
-	entry->sh_addralign = get_section_field(pos, nbytes);
+	entry->sh_flags = get_field(pos, nbytes);
 
 	pos += nbytes;
-	entry->sh_entsize = get_section_field(pos, nbytes);
+	entry->sh_addr = get_field(pos, nbytes);
+
+	pos += nbytes;
+	entry->sh_offset = get_field(pos, nbytes);
+
+	pos += nbytes;
+	entry->sh_size = get_field(pos, nbytes);
+
+	pos += nbytes;
+	entry->sh_link = get_field(pos, 4);
+
+	pos += 4;
+	entry->sh_info = get_field(pos, 4);
+
+	pos += 4;
+	entry->sh_addralign = get_field(pos, nbytes);
+
+	pos += nbytes;
+	entry->sh_entsize = get_field(pos, nbytes);
 }
 
 static void show_section_headers()
 {
-	struct sh_entry entries[sh_num];
+	struct sh_entry entries[eh.e_shnum];
 	uint64_t shstrtab_off;
-	size_t i;
+	int i;
 
 	 /* return if the file does not contain a section header table */
-	if (sh_off == 0)
+	if (eh.e_shoff == 0)
 		return;
 
 	printf("Section Headers:\n");
@@ -465,19 +441,19 @@ static void show_section_headers()
 	 * Load the values of the section header into entries to print them
 	 * later
 	 */
-	for (i = 0; i < sh_num; i++) {
+	for (i = 0; i < eh.e_shnum; i++) {
 		show_section_header(i, &entries[i]);
 
 		/*
 		 * Store the segment pointed by the shstrtab segment headers.
 		 * It will be needed later to get all the section header names.
 		 */
-		if (sh_strndx == i)
+		if (eh.e_shstrndx == i)
 			shstrtab_off = (uint64_t)(mfile + entries[i].sh_offset);
 	}
 
 	/* Print section header data */
-	for (i = 0; i < sh_num; i++) {
+	for (i = 0; i < eh.e_shnum; i++) {
 		char flag_buf[15] = {};
 		char *sec_name = (char *)(shstrtab_off + entries[i].sh_name);
 		get_section_flag(entries[i].sh_flags, flag_buf);
@@ -491,7 +467,7 @@ static void show_section_headers()
 			modinfo_len = entries[i].sh_size;
 		}
 
-		printf("  Nr: [%4lu]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
+		printf("  Nr: [%4d]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
 				i,
 				sec_name,
 				get_section_type(entries[i].sh_type),
