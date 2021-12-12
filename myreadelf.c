@@ -5,9 +5,13 @@
 #include <stdlib.h> //strtoull
 #include <string.h> // memcpy
 #include <inttypes.h> //uint64_t
+#include <sys/mman.h> // mmap
 #include <sys/param.h> //MAX
 #include <sys/types.h> //lseek
+#include <sys/stat.h> //fstat
 #include <unistd.h> //close
+
+static unsigned char *mfile;
 
 static int fd;
 static uint64_t ph_off;
@@ -22,7 +26,6 @@ static uint64_t sh_strndx;
 
 static bool is64bit = false;
 
-static unsigned char elf_header[64];
 static unsigned char *prog_header;
 static unsigned char *section_header;
 
@@ -193,7 +196,7 @@ static uint64_t show_var_fields(char *msg, unsigned char *buf, size_t offset,
 
 static uint64_t show_var_field(char *msg, size_t offset, size_t nbytes, bool hex)
 {
-	return show_var_fields(msg, elf_header, offset, nbytes, hex, true);
+	return show_var_fields(msg, mfile, offset, nbytes, hex, true);
 }
 
 static uint64_t get_prog_field(size_t offset, size_t nbytes)
@@ -206,48 +209,33 @@ static uint64_t get_section_field(size_t offset, size_t nbytes)
 	return show_var_fields("", section_header, offset, nbytes, false, false);
 }
 
-/* To understand what are the indexes in the elf_header, read the ELF Header format */
+/* The meaning of each index in described in the ELF Header documentation. */
 static void show_ident()
 {
-	int ret;
-
-	printf("Magic numbers: %#0x - %c%c%c\n", elf_header[0], elf_header[1], elf_header[2], elf_header[3]);
+	printf("Magic numbers: %#0x - %c%c%c\n", mfile[0], mfile[1], mfile[2], mfile[3]);
 
 	/* If the file is an 64bit ELF file, read the additional 8 bytes */
-	if (elf_header[4] == 2) {
+	if (mfile[4] == 2) {
 		/*
 		 * store the additional data at the end of the previously read
 		 * data
 		 * */
 		is64bit = true;
-		ret = read(fd, elf_header + 52, 12);
-		if (ret == -1)
-			errx(1, "read");
 	}
 
-	printf("The ELF file was compiled for %s endian machines\n", elf_header[5] == 1 ? "little" : "big");
-	// elf_header[6] == ELF version, which is always 1 == current
-	printf("OS ABI: 0x%d (0 == System V)\n", elf_header[7]);
-	// elf_header[8] == ABIVERSION, which we don't care
-	// elf_header[9-15] == UNUSED == EI_PAD
+	printf("The ELF file was compiled for %s endian machines\n", mfile[5] == 1 ? "little" : "big");
+	// mfile[6] == ELF version, which is always 1 == current
+	printf("OS ABI: 0x%d (0 == System V)\n", mfile[7]);
+	// mfile[8] == ABIVERSION, which we don't care
+	// mfile[9-15] == UNUSED == EI_PAD
 }
 
 static void show_header_fields()
 {
-	int ret;
 	size_t nbytes;
 	size_t pos;
 
-	/*
-	 * First read 52 bytes, which is the size of the ELF header table for
-	 * 32bit binaries, and if we detect a 64 bit binary, read more 8 bytes
-	 * (64 in total)
-	 */
-	ret = read(fd, elf_header, 52);
-	if (ret == -1)
-		err(1, "fd %d", fd);
-
-	if (elf_header[0] != 0x7f)
+	if (mfile[0] != 0x7f)
 		errx(1, "Not an ELF file");
 
 	printf("ELF Header\n");
@@ -256,16 +244,13 @@ static void show_header_fields()
 	show_ident();
 
 	// e_type
-	show_var_field("OBject type", 16, 2, true);
+	show_var_field("Object type", 16, 2, true);
 	// e_machine
 	show_var_field("ISA", 18, 2, true);
 	// e_version
 	show_var_field("ELF version", 20, 4, false);
 
-	/*
-	 * The number of bytes in field. If it's 64bit (elf_header[4] == 2),
-	 * it's 8 bytes, otherwise is 4.
-	 */
+	/* The number of bytes of some fields in the Elf Header. */
 	nbytes = is64bit ? 8 : 4;
 
 	pos = 24;
@@ -579,11 +564,20 @@ static void show_modinfo()
 
 int main(int argc, char **argv)
 {
+	struct stat st;
 	if (argc != 2)
 		err(1, "Usage: %s <elf file>\n", argv[0]);
 
 	fd = open(argv[1], O_RDONLY);
 	if (fd == -1)
+		err(1, "%s", argv[1]);
+
+	if (fstat(fd, &st))
+		err(1, "%s", argv[1]);
+
+	/* Map the ELF file into memory to avoid further read calls. */
+	mfile = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mfile == MAP_FAILED)
 		err(1, "%s", argv[1]);
 
 	show_header_fields();
