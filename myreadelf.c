@@ -361,14 +361,8 @@ static void show_program_headers()
 		show_prog_header(i, &entries[i]);
 
 		/* Get interp info */
-		if (entries[i].p_type == 3) {
-			size_t len = MAX(entries[i].p_filesz,
-						entries[i].p_memsz);
-			char interp[len];
-
-			pread(fd, interp, len, entries[i].p_offset);
-			printf("Interpreter: %s\n", interp);
-		}
+		if (entries[i].p_type == 3)
+			printf("Interpreter: %s\n", mfile + entries[i].p_offset);
 	}
 
 	printf("\nProgram Headers:\n");
@@ -484,16 +478,14 @@ static void show_section_headers()
 
 static void show_modinfo()
 {
-	char modinfo_data[modinfo_len];
-	unsigned int cur_len = 0;
-
-	pread(fd, modinfo_data, modinfo_len , modinfo_off);
+	uint64_t cur_len = modinfo_off;
+	uint64_t modinfo_end = modinfo_off + modinfo_len;
 
 	printf("\nModule Info:\n");
 
 	do {
-		cur_len += printf("%s\n", modinfo_data + cur_len);
-	} while (cur_len < modinfo_len);
+		cur_len += printf("%s\n", mfile + cur_len);
+	} while (cur_len < modinfo_end);
 }
 
 int main(int argc, char **argv)
