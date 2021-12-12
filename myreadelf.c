@@ -26,7 +26,6 @@ static uint64_t sh_strndx;
 
 static bool is64bit = false;
 
-static unsigned char *prog_header;
 static unsigned char *section_header;
 
 static unsigned int modinfo_off;
@@ -201,7 +200,7 @@ static uint64_t show_var_field(char *msg, size_t offset, size_t nbytes, bool hex
 
 static uint64_t get_prog_field(size_t offset, size_t nbytes)
 {
-	return show_var_fields("", prog_header, offset, nbytes, false, false);
+	return show_var_fields("", mfile, offset, nbytes, false, false);
 }
 
 static uint64_t get_section_field(size_t offset, size_t nbytes)
@@ -335,10 +334,10 @@ static void get_section_flag(uint64_t flags, char *flag_buf)
 		flag_buf[pos++] = 'E';
 }
 
-static void show_prog_header(struct ph_entry *entry)
+static void show_prog_header(size_t ph_index, struct ph_entry *entry)
 {
 	size_t nbytes = is64bit ? 8 : 4;
-	size_t pos = 0;
+	size_t pos = ph_off + (ph_index * ph_size);
 
 	/* Type is 4 bytes both in 32 and 64 bit */
 	entry->p_type = get_prog_field(pos, 4);
@@ -376,31 +375,15 @@ static void show_prog_header(struct ph_entry *entry)
 
 static void show_program_headers()
 {
-	int ret;
 	uint64_t i;
 	struct ph_entry entries[ph_num];
 
-	/* return if the file does not contain a program header table */
+	/* Return if the file does not contain a program header table */
 	if (ph_off == 0)
 		return;
 
-	prog_header = malloc(ph_size);
-	if (!prog_header)
-		errx(1, "malloc prog_header");
-
-	// seek to program header offset (it's not _needed_ but let's do it
-	// anyway)
-	lseek(fd, ph_off, SEEK_SET);
-
 	for (i = 0; i < ph_num; i++) {
-		/*
-		 * after each read, the file position will be at the next
-		 * program header
-		 */
-		ret = read(fd, prog_header, ph_size);
-		if (ret == -1)
-			errx(1, "prog header");
-		show_prog_header(&entries[i]);
+		show_prog_header(i, &entries[i]);
 
 		/* Get interp info */
 		if (entries[i].p_type == 3) {
@@ -431,8 +414,6 @@ static void show_program_headers()
 	}
 
 	printf("\n");
-
-	free(prog_header);
 }
 
 static void show_section_header(struct sh_entry *entry)
