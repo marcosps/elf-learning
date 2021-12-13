@@ -506,6 +506,8 @@ int main(int argc, char **argv)
 	if (mfile == MAP_FAILED)
 		err(1, "%s", argv[1]);
 
+	close(fd);
+
 	show_header_fields();
 	show_program_headers();
 	show_section_headers();
@@ -514,7 +516,7 @@ int main(int argc, char **argv)
 	if (modinfo_off > 0 && modinfo_len > 0)
 		show_modinfo();
 
-	close(fd);
+	munmap(mfile, st.st_size);
 
 	return 0;
 }
