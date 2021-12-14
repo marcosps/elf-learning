@@ -22,6 +22,12 @@ static char nbytes;
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
 
+static unsigned int symtab_off;
+static unsigned int symtab_len;
+static unsigned int sym_entry_size;
+static unsigned int strtab_off;
+static unsigned int strtab_len;
+
 #define EI_NIDENT 16
 
 struct elf_header {
@@ -67,7 +73,16 @@ struct ph_entry {
 	uint64_t p_align;
 };
 
-static char *get_prog_type(int type)
+struct sym_entry {
+	uint32_t st_name;
+	unsigned char st_info;
+	unsigned char st_other;
+	uint16_t st_shndx;
+	uint64_t st_value;
+	uint64_t st_size;
+};
+
+static char *get_ph_type(int type)
 {
 	if (type == 0)
 		return "NULL";
@@ -104,7 +119,7 @@ static char *get_prog_type(int type)
 	return "UNKNOWN";
 }
 
-static char *get_section_type(uint64_t type)
+static char *get_sh_type(uint64_t type)
 {
 	if (type == 0)
 		return "NULL";
@@ -182,6 +197,68 @@ static char *get_section_type(uint64_t type)
 	return "UNKNOWN";
 }
 
+static char *get_symbol_type(unsigned char info)
+{
+	unsigned char val = info & 0xf;
+	switch (val) {
+	case 0:
+		return "NOTYPE";
+	case 1:
+		return "OBJECT";
+	case 2:
+		return "FUNC";
+	case 3:
+		return "SECTION";
+	case 4:
+		return "FILE";
+	case 5:
+		return "COMMON";
+	case 6:
+		return "TLS";
+	case 7:
+		return "NUM";
+	case 10:
+		return "GNU_IFUNC";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+static char *get_symbol_bind(unsigned char info)
+{
+	unsigned char val = info >> 4;
+	switch (val) {
+	case 0:
+		return "LOCAL";
+	case 1:
+		return "GLOBAL";
+	case 2:
+		return "WEAK";
+	case 3:
+		return "NUM";
+	case 10:
+		return "GNU_UNIQUE";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+static char *get_symbol_visibility(unsigned char val)
+{
+	switch (val) {
+	case 0:
+		return "DEFAULT";
+	case 1:
+		return "INTERNAL";
+	case 2:
+		return "HIDDEN";
+	case 3:
+		return "PROTECTED";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 /* Prints the entry point, ph offset and sh offset */
 static uint64_t get_field(size_t offset, size_t len)
 {
@@ -196,7 +273,7 @@ static uint64_t get_field(size_t offset, size_t len)
 	return val;
 }
 
-static void show_header_fields()
+static void get_eh_fields()
 {
 	size_t pos = 16;
 
@@ -310,7 +387,7 @@ static void get_section_flag(uint64_t flags, char *flag_buf)
 		flag_buf[pos++] = 'E';
 }
 
-static void show_prog_header(size_t ph_index, struct ph_entry *entry)
+static void get_program_header(size_t ph_index, struct ph_entry *entry)
 {
 	size_t pos = eh.e_phoff + (ph_index * eh.e_phentsize);
 
@@ -358,7 +435,7 @@ static void show_program_headers()
 		return;
 
 	for (i = 0; i < eh.e_phnum; i++) {
-		show_prog_header(i, &entries[i]);
+		get_program_header(i, &entries[i]);
 
 		/* Get interp info */
 		if (entries[i].p_type == 3)
@@ -372,7 +449,7 @@ static void show_program_headers()
 		get_prog_flags(entries[i].p_flags, flag_buf);
 		printf("  Type: %20s\tOffset: 0x%lx\tVirtAddr: 0x%lx\tPhysAddr: 0x%lx\tFileSz (bytes): %lu\tMemSz (bytes): %lu\tFlags: %s"
 				"\n",
-				get_prog_type(entries[i].p_type),
+				get_ph_type(entries[i].p_type),
 				entries[i].p_offset,
 				entries[i].p_vaddr,
 				entries[i].p_paddr,
@@ -385,7 +462,7 @@ static void show_program_headers()
 	printf("\n");
 }
 
-static void show_section_header(size_t sh_index, struct sh_entry *entry)
+static void get_section_header(size_t sh_index, struct sh_entry *entry)
 {
 	int pos = eh.e_shoff + (sh_index * eh.e_shentsize);
 
@@ -436,7 +513,7 @@ static void show_section_headers()
 	 * later
 	 */
 	for (i = 0; i < eh.e_shnum; i++) {
-		show_section_header(i, &entries[i]);
+		get_section_header(i, &entries[i]);
 
 		/*
 		 * Store the segment pointed by the shstrtab segment headers.
@@ -452,19 +529,22 @@ static void show_section_headers()
 		char *sec_name = (char *)(shstrtab_off + entries[i].sh_name);
 		get_section_flag(entries[i].sh_flags, flag_buf);
 
-		/*
-		 * Record .modinfo off and len if we are dealing with a kernel
-		 * module.
-		 */
 		if (strncmp(sec_name, ".modinfo", 8) == 0) {
 			modinfo_off = entries[i].sh_offset;
 			modinfo_len = entries[i].sh_size;
+		} else if (strncmp(sec_name, ".symtab", 7) == 0) {
+			symtab_off = entries[i].sh_offset;
+			symtab_len = entries[i].sh_size;
+			sym_entry_size = entries[i].sh_entsize;
+		} else if (strncmp(sec_name, ".strtab", 7) == 0) {
+			strtab_off = entries[i].sh_offset;
+			strtab_len = entries[i].sh_size;
 		}
 
 		printf("  Nr: [%4d]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
 				i,
 				sec_name,
-				get_section_type(entries[i].sh_type),
+				get_sh_type(entries[i].sh_type),
 				entries[i].sh_addr,
 				entries[i].sh_offset,
 				entries[i].sh_size,
@@ -476,16 +556,92 @@ static void show_section_headers()
 	}
 }
 
+/* Show Linux kernel module information. */
 static void show_modinfo()
 {
 	uint64_t cur_len = modinfo_off;
 	uint64_t modinfo_end = modinfo_off + modinfo_len;
+
+	if (modinfo_off == 0 || modinfo_len == 0)
+		return;
 
 	printf("\nModule Info:\n");
 
 	do {
 		cur_len += printf("%s\n", mfile + cur_len);
 	} while (cur_len < modinfo_end);
+}
+
+static void get_symbol(size_t sym_index, struct sym_entry *entry)
+{
+	int pos = symtab_off + (sym_index * sym_entry_size);
+
+	entry->st_name = get_field(pos, 4);
+
+	pos += 4;
+	if (is64bit) {
+		entry->st_info = get_field(pos, 1);
+		pos += 1;
+		entry->st_other = get_field(pos, 1);
+		pos += 1;
+		entry->st_shndx = get_field(pos, 2);
+		pos += 2;
+		entry->st_value = get_field(pos, 4);
+		pos += 4;
+		entry->st_size = get_field(pos, 4);
+		pos += 4;
+
+	} else {
+		entry->st_value = get_field(pos, 4);
+		pos += 4;
+		entry->st_size = get_field(pos, 4);
+		pos += 4;
+		entry->st_info = get_field(pos, 1);
+		pos += 1;
+		entry->st_other = get_field(pos, 1);
+		pos += 1;
+		entry->st_shndx = get_field(pos, 2);
+		pos += 2;
+	}
+}
+
+static void show_symbol_tab()
+{
+	int num_entries = symtab_len / sym_entry_size;
+	struct sym_entry syms[num_entries];
+	int i;
+
+	if (symtab_off == 0 || symtab_len == 0)
+		return;
+
+	printf("\nSymbol Table (.symtab):\n");
+	printf("  Num:                Value       Size       Bind       Type   Visibility   RelToSection                 Name\n");
+	for (i = 0; i < num_entries; i++) {
+		char sec_rel[10] = {};
+
+		get_symbol(i, &syms[i]);
+
+		switch (syms[i].st_shndx) {
+		case 0xfff1:
+			sprintf(sec_rel, "%s", "ABS");
+			break;
+		case 0:
+			sprintf(sec_rel, "%s", "UND");
+			break;
+		default:
+			sprintf(sec_rel, "%d", syms[i].st_shndx);
+		}
+
+		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s %20s\n",
+				i,
+				syms[i].st_value,
+				syms[i].st_size,
+				get_symbol_bind(syms[i].st_info),
+				get_symbol_type(syms[i].st_info),
+				get_symbol_visibility(syms[i].st_other),
+				sec_rel,
+				mfile + strtab_off + syms[i].st_name);
+	}
 }
 
 int main(int argc, char **argv)
@@ -508,13 +664,14 @@ int main(int argc, char **argv)
 
 	close(fd);
 
-	show_header_fields();
+	get_eh_fields();
 	show_program_headers();
 	show_section_headers();
 
-	/* Show the module info if the ELF file is a Linux module */
-	if (modinfo_off > 0 && modinfo_len > 0)
-		show_modinfo();
+	show_modinfo();
+
+	if (sym_entry_size > 0)
+		show_symbol_tab();
 
 	munmap(mfile, st.st_size);
 
