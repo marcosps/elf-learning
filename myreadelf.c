@@ -22,11 +22,17 @@ static char nbytes;
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
 
-static unsigned int symtab_off;
-static unsigned int symtab_len;
-static unsigned int sym_entry_size;
-static unsigned int strtab_off;
-static unsigned int strtab_len;
+#define SYMTAB 0
+#define DYNTAB 1
+
+static struct sym_tab {
+	unsigned int tab_off;
+	unsigned int tab_len;
+	unsigned int entry_size;
+	unsigned int strtab_off;
+	unsigned int strtab_len;
+	unsigned int nentries;
+} tabs[2] = {};
 
 #define EI_NIDENT 16
 
@@ -533,12 +539,23 @@ static void show_section_headers()
 			modinfo_off = entries[i].sh_offset;
 			modinfo_len = entries[i].sh_size;
 		} else if (strncmp(sec_name, ".symtab", 7) == 0) {
-			symtab_off = entries[i].sh_offset;
-			symtab_len = entries[i].sh_size;
-			sym_entry_size = entries[i].sh_entsize;
+			tabs[SYMTAB].tab_off = entries[i].sh_offset;
+			tabs[SYMTAB].tab_len = entries[i].sh_size;
+			tabs[SYMTAB].entry_size = entries[i].sh_entsize;
+			tabs[SYMTAB].nentries = tabs[SYMTAB].tab_len /
+						tabs[SYMTAB].entry_size;
 		} else if (strncmp(sec_name, ".strtab", 7) == 0) {
-			strtab_off = entries[i].sh_offset;
-			strtab_len = entries[i].sh_size;
+			tabs[SYMTAB].strtab_off = entries[i].sh_offset;
+			tabs[SYMTAB].strtab_len = entries[i].sh_size;
+		} else if (strncmp(sec_name, ".dynsym", 7) == 0) {
+			tabs[DYNTAB].tab_off = entries[i].sh_offset;
+			tabs[DYNTAB].tab_len = entries[i].sh_size;
+			tabs[DYNTAB].entry_size = entries[i].sh_entsize;
+			tabs[DYNTAB].nentries = tabs[DYNTAB].tab_len /
+						tabs[DYNTAB].entry_size;
+		} else if (strncmp(sec_name, ".dynstr", 7) == 0) {
+			tabs[DYNTAB].strtab_off = entries[i].sh_offset;
+			tabs[DYNTAB].strtab_len = entries[i].sh_size;
 		}
 
 		printf("  Nr: [%4d]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
@@ -572,9 +589,9 @@ static void show_modinfo()
 	} while (cur_len < modinfo_end);
 }
 
-static void get_symbol(size_t sym_index, struct sym_entry *entry)
+static void get_symbol(struct sym_tab *t, size_t sym_index, struct sym_entry *entry)
 {
-	int pos = symtab_off + (sym_index * sym_entry_size);
+	int pos = t->tab_off + (sym_index * t->entry_size);
 
 	entry->st_name = get_field(pos, 4);
 
@@ -589,8 +606,6 @@ static void get_symbol(size_t sym_index, struct sym_entry *entry)
 		entry->st_value = get_field(pos, 4);
 		pos += 4;
 		entry->st_size = get_field(pos, 4);
-		pos += 4;
-
 	} else {
 		entry->st_value = get_field(pos, 4);
 		pos += 4;
@@ -601,25 +616,28 @@ static void get_symbol(size_t sym_index, struct sym_entry *entry)
 		entry->st_other = get_field(pos, 1);
 		pos += 1;
 		entry->st_shndx = get_field(pos, 2);
-		pos += 2;
 	}
 }
 
-static void show_symbol_tab()
+static void show_symbol_tab(unsigned int tindex)
 {
-	int num_entries = symtab_len / sym_entry_size;
-	struct sym_entry syms[num_entries];
-	int i;
+	struct sym_tab *t = &tabs[tindex];
+	struct sym_entry syms[t->nentries];
+	unsigned int i;
 
-	if (symtab_off == 0 || symtab_len == 0)
+	if (t->nentries == 0)
 		return;
 
-	printf("\nSymbol Table (.symtab):\n");
+	if (tindex == SYMTAB)
+		printf("\nSymbol Table (.symtab):\n");
+	else
+		printf("\nSymbol Table (.dyntab):\n");
+
 	printf("  Num:                Value       Size       Bind       Type   Visibility   RelToSection                 Name\n");
-	for (i = 0; i < num_entries; i++) {
+	for (i = 0; i < t->nentries; i++) {
 		char sec_rel[10] = {};
 
-		get_symbol(i, &syms[i]);
+		get_symbol(t, i, &syms[i]);
 
 		switch (syms[i].st_shndx) {
 		case 0xfff1:
@@ -640,7 +658,7 @@ static void show_symbol_tab()
 				get_symbol_type(syms[i].st_info),
 				get_symbol_visibility(syms[i].st_other),
 				sec_rel,
-				mfile + strtab_off + syms[i].st_name);
+				mfile + t->strtab_off + syms[i].st_name);
 	}
 }
 
@@ -670,8 +688,8 @@ int main(int argc, char **argv)
 
 	show_modinfo();
 
-	if (sym_entry_size > 0)
-		show_symbol_tab();
+	show_symbol_tab(DYNTAB);
+	show_symbol_tab(SYMTAB);
 
 	munmap(mfile, st.st_size);
 
