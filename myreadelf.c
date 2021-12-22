@@ -68,6 +68,8 @@ struct sh_entry {
 	int sh_entsize;
 };
 
+static struct sh_entry *sh_entries = NULL;
+
 struct ph_entry {
 	int p_type;
 	int p_flags;
@@ -78,6 +80,8 @@ struct ph_entry {
 	uint64_t p_memsz;
 	uint64_t p_align;
 };
+
+static struct ph_entry *ph_entries = NULL;
 
 struct sym_entry {
 	uint32_t st_name;
@@ -434,33 +438,36 @@ static void get_program_header(size_t ph_index, struct ph_entry *entry)
 static void show_program_headers()
 {
 	int i;
-	struct ph_entry entries[eh.e_phnum];
+	struct ph_entry *entry;
 
 	/* Return if the file does not contain a program header table */
 	if (eh.e_phoff == 0)
 		return;
 
 	for (i = 0; i < eh.e_phnum; i++) {
-		get_program_header(i, &entries[i]);
+		entry = &ph_entries[i];
+
+		get_program_header(i, entry);
 
 		/* Get interp info */
-		if (entries[i].p_type == 3)
-			printf("Interpreter: %s\n", mfile + entries[i].p_offset);
+		if (entry->p_type == 3)
+			printf("Interpreter: %s\n", mfile + entry->p_offset);
 	}
 
 	printf("\nProgram Headers:\n");
 	for (i = 0; i < eh.e_phnum; i++) {
 		char flag_buf[4] = {};
 
-		get_prog_flags(entries[i].p_flags, flag_buf);
+		entry = &ph_entries[i];
+		get_prog_flags(entry->p_flags, flag_buf);
 		printf("  Type: %20s\tOffset: 0x%lx\tVirtAddr: 0x%lx\tPhysAddr: 0x%lx\tFileSz (bytes): %lu\tMemSz (bytes): %lu\tFlags: %s"
 				"\n",
-				get_ph_type(entries[i].p_type),
-				entries[i].p_offset,
-				entries[i].p_vaddr,
-				entries[i].p_paddr,
-				entries[i].p_filesz,
-				entries[i].p_memsz,
+				get_ph_type(entry->p_type),
+				entry->p_offset,
+				entry->p_vaddr,
+				entry->p_paddr,
+				entry->p_filesz,
+				entry->p_memsz,
 				flag_buf
 		      );
 	}
@@ -502,10 +509,17 @@ static void get_section_header(size_t sh_index, struct sh_entry *entry)
 	entry->sh_entsize = get_field(pos, nbytes);
 }
 
+static char *get_section_name(uint64_t sec_index)
+{
+	return (char *)(mfile +
+			sh_entries[eh.e_shstrndx].sh_offset +
+			sh_entries[sec_index].sh_name);
+}
+
+/* sh_entries will be allocated by alloc_header_tables */
 static void show_section_headers()
 {
-	struct sh_entry entries[eh.e_shnum];
-	uint64_t shstrtab_off;
+	struct sh_entry *entry;
 	int i;
 
 	 /* return if the file does not contain a section header table */
@@ -518,62 +532,57 @@ static void show_section_headers()
 	 * Load the values of the section header into entries to print them
 	 * later
 	 */
-	for (i = 0; i < eh.e_shnum; i++) {
-		get_section_header(i, &entries[i]);
+	for (i = 0; i < eh.e_shnum; i++)
+		get_section_header(i, &sh_entries[i]);
 
-		/*
-		 * Store the segment pointed by the shstrtab segment headers.
-		 * It will be needed later to get all the section header names.
-		 */
-		if (eh.e_shstrndx == i)
-			shstrtab_off = (uint64_t)(mfile + entries[i].sh_offset);
-	}
-
-	printf("      Nr   Name                       Type               Address            Offset\n"
-	       "           Size                       EntSize            Flags   Link   Info   Align\n");
+	printf("      Nr   Name                             Type               Address            Offset\n"
+	       "           Size                             EntSize            Flags   Link   Info   Align\n");
 
 	/* Print section header data */
 	for (i = 0; i < eh.e_shnum; i++) {
+		char *sec_name;
 		char flag_buf[15] = {};
-		char *sec_name = (char *)(shstrtab_off + entries[i].sh_name);
-		get_section_flag(entries[i].sh_flags, flag_buf);
+
+		entry = &sh_entries[i];
+		sec_name = get_section_name(i);
+		get_section_flag(entry->sh_flags, flag_buf);
 
 		if (strncmp(sec_name, ".modinfo", 8) == 0) {
-			modinfo_off = entries[i].sh_offset;
-			modinfo_len = entries[i].sh_size;
+			modinfo_off = entry->sh_offset;
+			modinfo_len = entry->sh_size;
 		} else if (strncmp(sec_name, ".symtab", 7) == 0) {
-			tabs[SYMTAB].tab_off = entries[i].sh_offset;
-			tabs[SYMTAB].tab_len = entries[i].sh_size;
-			tabs[SYMTAB].entry_size = entries[i].sh_entsize;
+			tabs[SYMTAB].tab_off = entry->sh_offset;
+			tabs[SYMTAB].tab_len = entry->sh_size;
+			tabs[SYMTAB].entry_size = entry->sh_entsize;
 			tabs[SYMTAB].nentries = tabs[SYMTAB].tab_len /
 						tabs[SYMTAB].entry_size;
 		} else if (strncmp(sec_name, ".strtab", 7) == 0) {
-			tabs[SYMTAB].strtab_off = entries[i].sh_offset;
-			tabs[SYMTAB].strtab_len = entries[i].sh_size;
+			tabs[SYMTAB].strtab_off = entry->sh_offset;
+			tabs[SYMTAB].strtab_len = entry->sh_size;
 		} else if (strncmp(sec_name, ".dynsym", 7) == 0) {
-			tabs[DYNTAB].tab_off = entries[i].sh_offset;
-			tabs[DYNTAB].tab_len = entries[i].sh_size;
-			tabs[DYNTAB].entry_size = entries[i].sh_entsize;
+			tabs[DYNTAB].tab_off = entry->sh_offset;
+			tabs[DYNTAB].tab_len = entry->sh_size;
+			tabs[DYNTAB].entry_size = entry->sh_entsize;
 			tabs[DYNTAB].nentries = tabs[DYNTAB].tab_len /
 						tabs[DYNTAB].entry_size;
 		} else if (strncmp(sec_name, ".dynstr", 7) == 0) {
-			tabs[DYNTAB].strtab_off = entries[i].sh_offset;
-			tabs[DYNTAB].strtab_len = entries[i].sh_size;
+			tabs[DYNTAB].strtab_off = entry->sh_offset;
+			tabs[DYNTAB].strtab_len = entry->sh_size;
 		}
 
-		printf("  [%4d]   %-24s   %-15s   %016d   %-d\n"
-		       "           %024d   %016d   %5s   %-4d   %4d   %d\n",
+		printf("  [%4d]   %-30s   %-16s   %016d   %-d\n"
+		       "           %030d   %016d   %5s   %-4d   %4d   %d\n",
 				i,
 				sec_name,
-				get_sh_type(entries[i].sh_type),
-				entries[i].sh_addr,
-				entries[i].sh_offset,
-				entries[i].sh_size,
-				entries[i].sh_entsize,
+				get_sh_type(entry->sh_type),
+				entry->sh_addr,
+				entry->sh_offset,
+				entry->sh_size,
+				entry->sh_entsize,
 				flag_buf,
-				entries[i].sh_link,
-				entries[i].sh_info,
-				entries[i].sh_addralign);
+				entry->sh_link,
+				entry->sh_info,
+				entry->sh_addralign);
 	}
 }
 
@@ -640,6 +649,7 @@ static void show_symbol_tab(unsigned int tindex)
 	printf("  Num:                Value       Size       Bind       Type   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
 		char sec_rel[10] = {};
+		char *sym_type;
 
 		get_symbol(t, i, &syms[i]);
 
@@ -654,16 +664,41 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%d", syms[i].st_shndx);
 		}
 
+		sym_type = get_symbol_type(syms[i].st_info);
+
 		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s   %s\n",
 				i,
 				syms[i].st_value,
 				syms[i].st_size,
 				get_symbol_bind(syms[i].st_info),
-				get_symbol_type(syms[i].st_info),
+				sym_type,
 				get_symbol_visibility(syms[i].st_other),
 				sec_rel,
-				mfile + t->strtab_off + syms[i].st_name);
+				strncmp(sym_type, "SECTION", 7) == 0
+					? get_section_name(syms[i].st_shndx)
+					: (char *)(mfile + t->strtab_off + syms[i].st_name));
 	}
+}
+
+static void alloc_header_tables()
+{
+	if (eh.e_shnum > 0) {
+		sh_entries = malloc(sizeof(struct sh_entry) * eh.e_shnum);
+		if (!sh_entries)
+			errx(1, "malloc sh_entries");
+	}
+
+	if (eh.e_phnum > 0) {
+		ph_entries = malloc(sizeof(struct ph_entry) * eh.e_phnum);
+		if (!ph_entries)
+			errx(1, "malloc ph_entries");
+	}
+}
+
+static void release_header_tables()
+{
+	free(sh_entries);
+	free(ph_entries);
 }
 
 int main(int argc, char **argv)
@@ -687,6 +722,9 @@ int main(int argc, char **argv)
 	close(fd);
 
 	get_eh_fields();
+
+	alloc_header_tables();
+
 	show_program_headers();
 	show_section_headers();
 
@@ -694,6 +732,8 @@ int main(int argc, char **argv)
 
 	show_symbol_tab(DYNTAB);
 	show_symbol_tab(SYMTAB);
+
+	release_header_tables();
 
 	munmap(mfile, st.st_size);
 
