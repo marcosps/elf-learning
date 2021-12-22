@@ -283,6 +283,24 @@ static uint64_t get_field(size_t offset, size_t len)
 	return val;
 }
 
+static char *get_object_type(int val)
+{
+	switch (val) {
+	case 0:
+		return "NONE";
+	case 1:
+		return "REL (Relocatable file)";
+	case 2:
+		return "EXEC (Executable file)";
+	case 3:
+		return "DYN (Shared object file)";
+	case 4:
+		return "CORE (Core File)";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 static void get_eh_fields()
 {
 	size_t pos = 16;
@@ -335,25 +353,23 @@ static void get_eh_fields()
 	eh.e_shstrndx = get_field(pos, 2);
 
 	printf("ELF Header\n");
-	printf("==========\n");
+	printf("  Magic numbers: %#0x - %c%c%c\n", mfile[0], mfile[1], mfile[2], mfile[3]);
+	printf("  The ELF file was compiled for %s endian machines\n", mfile[5] == 1 ? "little" : "big");
+	printf("  OS ABI: 0x%d (0 == System V)\n", mfile[7]);
 
-	printf("Magic numbers: %#0x - %c%c%c\n", mfile[0], mfile[1], mfile[2], mfile[3]);
-	printf("The ELF file was compiled for %s endian machines\n", mfile[5] == 1 ? "little" : "big");
-	printf("OS ABI: 0x%d (0 == System V)\n", mfile[7]);
-
-	printf("Object type: 0x%x\n", eh.e_type);
-	printf("ISA: 0x%x\n", eh.e_machine);
-	printf("ELF version: %d\n", eh.e_version);
-	printf("Entry point: 0x%lx\n", eh.e_entry);
-	printf("Program header offset (bytes): %lu\n", eh.e_phoff);
-	printf("Section header offset (bytes): %lu\n", eh.e_shoff);
-	printf("Flags: 0x%x\n", eh.e_flags);
-	printf("Size of this header (bytes): %d\n", eh.e_ehsize);
-	printf("Size of program header (bytes): %d\n", eh.e_phentsize);
-	printf("Number of program headers: %d\n", eh.e_phnum);
-	printf("Size of section headers (bytes): %d\n", eh.e_shentsize);
-	printf("Number of section headers: %d\n", eh.e_shnum);
-	printf("Section header string table index: %d\n", eh.e_shstrndx);
+	printf("  Object type: %s\n", get_object_type(eh.e_type));
+	printf("  ISA: 0x%x\n", eh.e_machine);
+	printf("  ELF version: %d\n", eh.e_version);
+	printf("  Entry point: 0x%lx\n", eh.e_entry);
+	printf("  Program header offset (bytes): %lu\n", eh.e_phoff);
+	printf("  Section header offset (bytes): %lu\n", eh.e_shoff);
+	printf("  Flags: 0x%x\n", eh.e_flags);
+	printf("  Size of this header (bytes): %d\n", eh.e_ehsize);
+	printf("  Size of program header (bytes): %d\n", eh.e_phentsize);
+	printf("  Number of program headers: %d\n", eh.e_phnum);
+	printf("  Size of section headers (bytes): %d\n", eh.e_shentsize);
+	printf("  Number of section headers: %d\n", eh.e_shnum);
+	printf("  Section header string table index: %d\n", eh.e_shstrndx);
 }
 
 static void get_prog_flags(uint64_t flags, char *flag_buf)
@@ -451,7 +467,7 @@ static void show_program_headers()
 
 		/* Get interp info */
 		if (entry->p_type == 3)
-			printf("Interpreter: %s\n", mfile + entry->p_offset);
+			printf("  Interpreter: %s\n", mfile + entry->p_offset);
 	}
 
 	printf("\nProgram Headers:\n");
@@ -571,7 +587,7 @@ static void show_section_headers()
 		}
 
 		printf("  [%4d]   %-30s   %-16s   %016d   %-d\n"
-		       "           %030d   %016d   %5s   %-4d   %4d   %d\n",
+		       "           %030d   %016d   %-5s   %-4d   %-4d   %-d\n",
 				i,
 				sec_name,
 				get_sh_type(entry->sh_type),
