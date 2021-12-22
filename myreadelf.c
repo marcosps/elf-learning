@@ -512,7 +512,7 @@ static void show_section_headers()
 	if (eh.e_shoff == 0)
 		return;
 
-	printf("Section Headers:\n");
+	printf("\nSection Headers:\n");
 
 	/*
 	 * Load the values of the section header into entries to print them
@@ -528,6 +528,9 @@ static void show_section_headers()
 		if (eh.e_shstrndx == i)
 			shstrtab_off = (uint64_t)(mfile + entries[i].sh_offset);
 	}
+
+	printf("      Nr   Name                       Type               Address            Offset\n"
+	       "           Size                       EntSize            Flags   Link   Info   Align\n");
 
 	/* Print section header data */
 	for (i = 0; i < eh.e_shnum; i++) {
@@ -558,7 +561,8 @@ static void show_section_headers()
 			tabs[DYNTAB].strtab_len = entries[i].sh_size;
 		}
 
-		printf("  Nr: [%4d]   Name: %20s   Type: %15s\t   Address: %10d\tOffset: %10d   Size: %10d  EntSize: %5d   Flags: %5s   Link %3d   Info %3d   Align %3d\n",
+		printf("  [%4d]   %-24s   %-15s   %016d   %-d\n"
+		       "           %024d   %016d   %5s   %-4d   %4d   %d\n",
 				i,
 				sec_name,
 				get_sh_type(entries[i].sh_type),
