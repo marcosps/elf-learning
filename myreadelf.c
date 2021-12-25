@@ -471,21 +471,24 @@ static void show_program_headers()
 	}
 
 	printf("\nProgram Headers:\n");
+	printf("  Type             Offset               VirtAddr             PhysAddr\n"
+	       "                   FileSiz              MemSiz                 Flags   Align\n");
 	for (i = 0; i < eh.e_phnum; i++) {
 		char flag_buf[4] = {};
 
 		entry = &ph_entries[i];
 		get_prog_flags(entry->p_flags, flag_buf);
-		printf("  Type: %20s\tOffset: 0x%lx\tVirtAddr: 0x%lx\tPhysAddr: 0x%lx\tFileSz (bytes): %lu\tMemSz (bytes): %lu\tFlags: %s"
-				"\n",
+		printf("  %-14s   0x%016lx   0x%016lx   0x%016lx\n"
+		       "                   0x%016lx   0x%016lx     %-5s   0x%lx\n",
 				get_ph_type(entry->p_type),
 				entry->p_offset,
 				entry->p_vaddr,
 				entry->p_paddr,
+
 				entry->p_filesz,
 				entry->p_memsz,
-				flag_buf
-		      );
+				flag_buf,
+				entry->p_align);
 	}
 
 	printf("\n");
