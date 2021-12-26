@@ -92,117 +92,113 @@ struct sym_entry {
 
 static char *get_ph_type(int type)
 {
-	if (type == 0)
+	switch (type) {
+	case 0:
 		return "NULL";
-	else if (type == 1)
+	case 1:
 		return "LOAD";
-	else if (type == 2)
+	case 2:
 		return "DYNAMIC";
-	else if (type == 3)
+	case 3:
 		return "INTEROP";
-	else if (type == 4)
+	case 4:
 		return "NOTE";
-	else if (type == 5)
+	case 5:
 		return "SHLIB";
-	else if (type == 6)
+	case 6:
 		return "PHDR";
-	else if (type == 7)
+	case 7:
 		return "TLS";
-	else if (type == 0x60000000)
+	case 0x60000000:
 		return "LOOS";
-	else if (type == 0x6FFFFFFF)
+	case 0x6FFFFFFF:
 		return "HIOS";
 	// begin Defined in elf.h
-	else if (type == 0x6474e550)
+	case 0x6474e550:
 		return "GNU_EH_FRAME";
-	else if (type == 0x6474e551)
+	case 0x6474e551:
 		return "GNU_STACK";
-	else if (type == 0x6474e552)
+	case 0x6474e552:
 		return "GNU_RELRO";
 	// enf defined by elf.h
-	else if (type == 0x70000000)
+	case 0x70000000:
 		return "LOPROC";
-	else if (type == 0x7FFFFFFF)
+	case 0x7FFFFFFF:
 		return "HIPROC";
-	return "UNKNOWN";
+	default:
+		return "UNKNOWN";
+	}
 }
 
 static char *get_sh_type(uint64_t type)
 {
-	if (type == 0)
+	switch (type) {
+	case 0:
 		return "NULL";
-	else if (type == 1)
+	case 1:
 		return "PROGBITS";
-	else if (type == 2)
+	case 2:
 		return "SYMTAB";
-	else if (type == 3)
+	case 3:
 		return "STRTAB";
-	else if (type == 4)
+	case 4:
 		return "RELA";
-	else if (type == 5)
+	case 5:
 		return "HASH";
-	else if (type == 6)
+	case 6:
 		return "DYNAMIC";
-	else if (type == 7)
+	case 7:
 		return "NOTE";
-	else if (type == 8)
+	case 8:
 		return "NOBITS";
-	else if (type == 9)
+	case 9:
 		return "REL";
-	else if (type == 10)
+	case 10:
 		return "SHLIB";
-	else if (type == 11)
+	case 11:
 		return "DYNLIB";
-	else if (type == 12)
+	case 12:
 		return "INIT_ARRAY";
-	else if (type == 13)
+	case 13:
 		return "FINI_ARRAY";
-	else if (type == 14)
+	case 14:
 		return "PREINIT_ARRAY";
-	else if (type == 15)
+	case 15:
 		return "GROUP";
-	else if (type == 16)
+	case 16:
 		return "SYMTAB_SHNDX";
-	else if (type == 17)
+	case 17:
 		return "NUM";
-	else if (type == 0x60000000)
+	case 0x60000000:
 		return "LOOS";
 	// begin defined in /usr/include/elf.h
-	else if (type == 0x6ffffff5)
+	case 0x6ffffff5:
 	       return "GNU_ATTRIBUTES";
-	else if (type == 0x6ffffff6)
+	case 0x6ffffff6:
 		return "GNU_HASH";
-	else if (type == 0x6ffffff7)
+	case 0x6ffffff7:
 		return "GNU_LIBLIST";
-	else if (type == 0x6ffffff8)
+	case 0x6ffffff8:
 		return "CHECKSUM";
-	else if (type == 0x6ffffffa)
-		return "LOSUNW";
-	else if (type == 0x6ffffffa)
-		return "SUNW_move";
-	else if (type == 0x6ffffffb)
-		return "SUNW_COMDAT";
-	else if (type == 0x6ffffffc)
-		return "SUNW_syminfo";
-	else if (type == 0x6ffffffd)
+	case 0x6ffffffd:
 		return "GNU_verdef";
-	else if (type == 0x6ffffffe)
+	case 0x6ffffffe:
 		return "GNU_verneed";
-	else if (type == 0x6fffffff)
+	case 0x6fffffff:
 		return "GNU_versym";
-	else if (type == 0x6fffffff)
-		return "HISUNW";
-	else if (type == 0x6fffffff)
+	case 0x6fffffff:
 		return "HIOS";
-	else if (type == 0x70000000)
+	case 0x70000000:
 		return "LOPROC";
-	else if (type == 0x7fffffff)
+	case 0x7fffffff:
 		return "HIPROC";
-	else if (type == 0x80000000)
+	case 0x80000000:
 		return "LOUSER";
-	else if (type == 0x8fffffff)
+	case 0x8fffffff:
 		return "HIUSER";
-	return "UNKNOWN";
+	default:
+		return "UNKNOWN";
+	}
 }
 
 static char *get_symbol_type(unsigned char info)
