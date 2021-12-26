@@ -2,12 +2,10 @@
 #include <fcntl.h>
 #include <stdbool.h> // bool
 #include <stdio.h>
-#include <stdlib.h> //strtoull
+#include <stdlib.h> // malloc
 #include <string.h> // memcpy
 #include <inttypes.h> //uint64_t
 #include <sys/mman.h> // mmap
-#include <sys/param.h> //MAX
-#include <sys/types.h> //lseek
 #include <sys/stat.h> //fstat
 #include <unistd.h> //close
 
