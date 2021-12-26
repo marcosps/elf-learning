@@ -267,18 +267,17 @@ static char *get_symbol_visibility(unsigned char val)
 	}
 }
 
-/* Prints the entry point, ph offset and sh offset */
-static uint64_t get_field(size_t offset, size_t len)
+/* Get value mfile starting from offset + len */
+static uint64_t get_field(size_t *offset, size_t len)
 {
 	unsigned char data[9] = {0};
+
+	memcpy(data, mfile + *offset, len);
+
+	*offset += len;
+
 	/* Big enough to store 32 and 64 bit values */
-	uint64_t val;
-
-	memcpy(data, mfile + offset, len);
-	/* TODO: How to convert it by using glibc? */
-	val = *(uint64_t *)data;
-
-	return val;
+	return *(uint64_t *)data;
 }
 
 static char *get_object_type(int val)
@@ -309,46 +308,23 @@ static void get_eh_fields()
 	if (mfile[4] == 2)
 		is64bit = true;
 
-	eh.e_type = get_field(pos, 2);
-
-	pos += 2;
-	eh.e_machine = get_field(pos, 2);
-
-	pos += 2;
-	eh.e_version = get_field(pos, 4);
+	eh.e_type = get_field(&pos, 2);
+	eh.e_machine = get_field(&pos, 2);
+	eh.e_version = get_field(&pos, 4);
 
 	/* The number of bytes of some fields in the Elf Header. */
 	nbytes = is64bit ? 8 : 4;
 
-	pos += 4;
-	eh.e_entry = get_field(pos, nbytes);
-
-	pos += nbytes;
-	eh.e_phoff = get_field(pos, nbytes);
-
-	pos += nbytes;
-	eh.e_shoff = get_field(pos, nbytes);
-
-	pos += nbytes;
-	eh.e_flags = get_field(pos, 4);
-
-	pos += 4;
-	eh.e_ehsize = get_field(pos, 2);
-
-	pos += 2;
-	eh.e_phentsize = get_field(pos, 2);
-
-	pos += 2;
-	eh.e_phnum = get_field(pos, 2);
-
-	pos += 2;
-	eh.e_shentsize = get_field(pos, 2);
-
-	pos += 2;
-	eh.e_shnum = get_field(pos, 2);
-
-	pos += 2;
-	eh.e_shstrndx = get_field(pos, 2);
+	eh.e_entry = get_field(&pos, nbytes);
+	eh.e_phoff = get_field(&pos, nbytes);
+	eh.e_shoff = get_field(&pos, nbytes);
+	eh.e_flags = get_field(&pos, 4);
+	eh.e_ehsize = get_field(&pos, 2);
+	eh.e_phentsize = get_field(&pos, 2);
+	eh.e_phnum = get_field(&pos, 2);
+	eh.e_shentsize = get_field(&pos, 2);
+	eh.e_shnum = get_field(&pos, 2);
+	eh.e_shstrndx = get_field(&pos, 2);
 
 	printf("ELF Header\n");
 	printf("  Magic numbers: %#0x - %c%c%c\n", mfile[0], mfile[1], mfile[2], mfile[3]);
@@ -416,37 +392,23 @@ static void get_program_header(size_t ph_index, struct ph_entry *entry)
 	size_t pos = eh.e_phoff + (ph_index * eh.e_phentsize);
 
 	/* Type is 4 bytes both in 32 and 64 bit */
-	entry->p_type = get_field(pos, 4);
-	pos += 4;
+	entry->p_type = get_field(&pos, 4);
 
 	/* On 64 bit, the flags field comes after the type */
-	if (is64bit) {
-		entry->p_flags = get_field(pos, 4);
-		pos += 4;
-	}
+	if (is64bit)
+		entry->p_flags = get_field(&pos, 4);
 
-	entry->p_offset = get_field(pos, nbytes);
-	pos += nbytes;
-
-	entry->p_vaddr = get_field(pos, nbytes);
-	pos += nbytes;
-
-	entry->p_paddr = get_field(pos, nbytes);
-	pos += nbytes;
-
-	entry->p_filesz = get_field(pos, nbytes);
-	pos += nbytes;
-
-	entry->p_memsz = get_field(pos, nbytes);
-	pos += nbytes;
+	entry->p_offset = get_field(&pos, nbytes);
+	entry->p_vaddr = get_field(&pos, nbytes);
+	entry->p_paddr = get_field(&pos, nbytes);
+	entry->p_filesz = get_field(&pos, nbytes);
+	entry->p_memsz = get_field(&pos, nbytes);
 
 	/* On 32bit, the flag field exists after the MemSize */
-	if (!is64bit) {
-		entry->p_flags = get_field(pos, 4);
-		pos += 4;
-	}
+	if (!is64bit)
+		entry->p_flags = get_field(&pos, 4);
 
-	entry->p_align = get_field(pos, nbytes);
+	entry->p_align = get_field(&pos, nbytes);
 }
 
 static void show_program_headers()
@@ -494,36 +456,18 @@ static void show_program_headers()
 
 static void get_section_header(size_t sh_index, struct sh_entry *entry)
 {
-	int pos = eh.e_shoff + (sh_index * eh.e_shentsize);
+	size_t pos = eh.e_shoff + (sh_index * eh.e_shentsize);
 
-	entry->sh_name = get_field(pos, 4);
-
-	pos += 4;
-	entry->sh_type = get_field(pos, 4);
-
-	pos += 4;
-	entry->sh_flags = get_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_addr = get_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_offset = get_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_size = get_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_link = get_field(pos, 4);
-
-	pos += 4;
-	entry->sh_info = get_field(pos, 4);
-
-	pos += 4;
-	entry->sh_addralign = get_field(pos, nbytes);
-
-	pos += nbytes;
-	entry->sh_entsize = get_field(pos, nbytes);
+	entry->sh_name = get_field(&pos, 4);
+	entry->sh_type = get_field(&pos, 4);
+	entry->sh_flags = get_field(&pos, nbytes);
+	entry->sh_addr = get_field(&pos, nbytes);
+	entry->sh_offset = get_field(&pos, nbytes);
+	entry->sh_size = get_field(&pos, nbytes);
+	entry->sh_link = get_field(&pos, 4);
+	entry->sh_info = get_field(&pos, 4);
+	entry->sh_addralign = get_field(&pos, nbytes);
+	entry->sh_entsize = get_field(&pos, nbytes);
 }
 
 static char *get_section_name(uint64_t sec_index)
@@ -621,31 +565,22 @@ static void show_modinfo()
 
 static void get_symbol(struct sym_tab *t, size_t sym_index, struct sym_entry *entry)
 {
-	int pos = t->tab_off + (sym_index * t->entry_size);
+	size_t pos = t->tab_off + (sym_index * t->entry_size);
 
-	entry->st_name = get_field(pos, 4);
+	entry->st_name = get_field(&pos, 4);
 
-	pos += 4;
 	if (is64bit) {
-		entry->st_info = get_field(pos, 1);
-		pos += 1;
-		entry->st_other = get_field(pos, 1);
-		pos += 1;
-		entry->st_shndx = get_field(pos, 2);
-		pos += 2;
-		entry->st_value = get_field(pos, 4);
-		pos += 4;
-		entry->st_size = get_field(pos, 4);
+		entry->st_info = get_field(&pos, 1);
+		entry->st_other = get_field(&pos, 1);
+		entry->st_shndx = get_field(&pos, 2);
+		entry->st_value = get_field(&pos, 4);
+		entry->st_size = get_field(&pos, 4);
 	} else {
-		entry->st_value = get_field(pos, 4);
-		pos += 4;
-		entry->st_size = get_field(pos, 4);
-		pos += 4;
-		entry->st_info = get_field(pos, 1);
-		pos += 1;
-		entry->st_other = get_field(pos, 1);
-		pos += 1;
-		entry->st_shndx = get_field(pos, 2);
+		entry->st_value = get_field(&pos, 4);
+		entry->st_size = get_field(&pos, 4);
+		entry->st_info = get_field(&pos, 1);
+		entry->st_other = get_field(&pos, 1);
+		entry->st_shndx = get_field(&pos, 2);
 	}
 }
 
