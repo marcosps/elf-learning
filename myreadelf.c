@@ -92,6 +92,12 @@ static struct sym_tab {
 	struct sym_entry *entries;
 } tabs[2] = {};
 
+struct rela_entry {
+	uint64_t r_offset;
+	uint64_t r_info;
+	int64_t r_addend;
+};
+
 static char *get_ph_type(int type)
 {
 	switch (type) {
@@ -580,6 +586,11 @@ static void get_symbol(struct sym_tab *t, size_t sym_index, struct sym_entry *en
 	}
 }
 
+static char *get_symbol_name(struct sym_entry *sym, unsigned int tindex)
+{
+	return (char *)(mfile + tabs[tindex].strtab_off + sym->st_name);
+}
+
 static void show_symbol_tab(unsigned int tindex)
 {
 	struct sym_tab *t = &tabs[tindex];
@@ -624,7 +635,64 @@ static void show_symbol_tab(unsigned int tindex)
 				sec_rel,
 				strncmp(sym_type, "SECTION", 7) == 0
 					? get_section_name(sym->st_shndx)
-					: (char *)(mfile + t->strtab_off + sym->st_name));
+					: get_symbol_name(sym, tindex));
+	}
+}
+
+static void get_rel_entry(bool rela, struct sh_entry *she, size_t rel_index,
+				struct rela_entry *rel)
+{
+	size_t pos = she->sh_offset + (rel_index * she->sh_entsize);
+
+	rel->r_offset = get_field(&pos, nbytes);
+	rel->r_info = get_field(&pos, nbytes);
+
+	if (rela)
+		rel->r_addend = get_field(&pos, nbytes);
+}
+
+/*static char *get_rel_type(uint64_t r_info)*/
+/*{*/
+/*}*/
+
+static void show_relocation_sections()
+{
+	int i;
+
+	for (i = 0; i < eh.e_shnum; i++) {
+		size_t j;
+		bool is_rela;
+		size_t rel_num;
+		struct sh_entry *she = &sh_entries[i];
+
+		/* type == 4 means relocation */
+		if (she->sh_type != 4 && she->sh_type != 9)
+			continue;
+
+		is_rela = she->sh_type == 4;
+		rel_num = she->sh_size / she->sh_entsize;
+
+		printf("\nRelocation section '%s' with %lu entries:\n",
+				get_section_name(i), rel_num);
+
+		printf("  Offset         Info           Sym. Index   Type           Sym. Value     Sym. Name + Addend\n");
+		for (j = 0; j < rel_num; j++) {
+			struct rela_entry entry;
+			struct sym_entry *sym;
+
+			get_rel_entry(is_rela, she, j, &entry);
+
+			sym = &tabs[SYMTAB].entries[entry.r_info >> 32];
+
+			printf("  %012lx   %012lx   %10lu   %012lx   %012lx   %s\n",
+					entry.r_offset,
+					entry.r_info,
+					entry.r_info >> 32,
+					entry.r_info & 0xffffffff,
+					sym->st_value,
+					get_symbol_name(sym, SYMTAB)
+			      );
+		}
 	}
 }
 
@@ -682,6 +750,8 @@ int main(int argc, char **argv)
 
 	show_symbol_tab(DYNTAB);
 	show_symbol_tab(SYMTAB);
+
+	show_relocation_sections();
 
 	show_modinfo();
 
