@@ -20,18 +20,6 @@ static char nbytes;
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
 
-#define SYMTAB 0
-#define DYNTAB 1
-
-static struct sym_tab {
-	unsigned int tab_off;
-	unsigned int tab_len;
-	unsigned int entry_size;
-	unsigned int strtab_off;
-	unsigned int strtab_len;
-	unsigned int nentries;
-} tabs[2] = {};
-
 #define EI_NIDENT 16
 
 struct elf_header {
@@ -89,6 +77,20 @@ struct sym_entry {
 	uint64_t st_value;
 	uint64_t st_size;
 };
+
+/* There are only two symbol tables in ELF files: symtab and dyntab */
+#define SYMTAB 0
+#define DYNTAB 1
+
+static struct sym_tab {
+	unsigned int tab_off;
+	unsigned int tab_len;
+	unsigned int entry_size;
+	unsigned int strtab_off;
+	unsigned int strtab_len;
+	unsigned int nentries;
+	struct sym_entry *entries;
+} tabs[2] = {};
 
 static char *get_ph_type(int type)
 {
@@ -186,8 +188,6 @@ static char *get_sh_type(uint64_t type)
 		return "GNU_verneed";
 	case 0x6fffffff:
 		return "GNU_versym";
-	case 0x6fffffff:
-		return "HIOS";
 	case 0x70000000:
 		return "LOPROC";
 	case 0x7fffffff:
@@ -583,25 +583,25 @@ static void get_symbol(struct sym_tab *t, size_t sym_index, struct sym_entry *en
 static void show_symbol_tab(unsigned int tindex)
 {
 	struct sym_tab *t = &tabs[tindex];
-	struct sym_entry syms[t->nentries];
 	unsigned int i;
 
 	if (t->nentries == 0)
 		return;
 
-	if (tindex == SYMTAB)
-		printf("\nSymbol Table (.symtab):\n");
-	else
-		printf("\nSymbol Table (.dyntab):\n");
+	t->entries = malloc(sizeof(struct sym_entry) * t->nentries);
+	if (!t->entries)
+		err(1, "malloc %s", tindex == SYMTAB ? "symtab" : "dyntab");
 
+	printf("\nSymbol Table (.%s):\n", tindex == SYMTAB ? "symtab" : "dyntab");
 	printf("  Num:                Value       Size       Bind       Type   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
+		struct sym_entry *sym = &t->entries[i];
 		char sec_rel[10] = {};
 		char *sym_type;
 
-		get_symbol(t, i, &syms[i]);
+		get_symbol(t, i, sym);
 
-		switch (syms[i].st_shndx) {
+		switch (sym->st_shndx) {
 		case 0xfff1:
 			sprintf(sec_rel, "%s", "ABS");
 			break;
@@ -609,22 +609,22 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%s", "UND");
 			break;
 		default:
-			sprintf(sec_rel, "%d", syms[i].st_shndx);
+			sprintf(sec_rel, "%d", sym->st_shndx);
 		}
 
-		sym_type = get_symbol_type(syms[i].st_info);
+		sym_type = get_symbol_type(sym->st_info);
 
 		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s   %s\n",
 				i,
-				syms[i].st_value,
-				syms[i].st_size,
-				get_symbol_bind(syms[i].st_info),
+				sym->st_value,
+				sym->st_size,
+				get_symbol_bind(sym->st_info),
 				sym_type,
-				get_symbol_visibility(syms[i].st_other),
+				get_symbol_visibility(sym->st_other),
 				sec_rel,
 				strncmp(sym_type, "SECTION", 7) == 0
-					? get_section_name(syms[i].st_shndx)
-					: (char *)(mfile + t->strtab_off + syms[i].st_name));
+					? get_section_name(sym->st_shndx)
+					: (char *)(mfile + t->strtab_off + sym->st_name));
 	}
 }
 
@@ -647,6 +647,10 @@ static void release_header_tables()
 {
 	free(sh_entries);
 	free(ph_entries);
+	if (tabs[DYNTAB].nentries > 0)
+		free(tabs[DYNTAB].entries);
+	if (tabs[SYMTAB].nentries > 0)
+		free(tabs[SYMTAB].entries);
 }
 
 int main(int argc, char **argv)
@@ -676,10 +680,10 @@ int main(int argc, char **argv)
 	show_program_headers();
 	show_section_headers();
 
-	show_modinfo();
-
 	show_symbol_tab(DYNTAB);
 	show_symbol_tab(SYMTAB);
+
+	show_modinfo();
 
 	release_header_tables();
 
