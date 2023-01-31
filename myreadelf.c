@@ -9,6 +9,12 @@
 #include <sys/stat.h> //fstat
 #include <unistd.h> //close
 
+/* Special section indexes. Got from elf.h */
+#define SHN_UNDEF	0 /* undefined section */
+#define SHN_ABS		0xfff1 /* Associated symbol is absolute */
+#define SHN_LOOS	0xff20 /* Start index of OS specific sections */
+#define SHN_HIOS	0xff3f /* End index of OS specific sections */
+
 static unsigned char *mfile;
 
 static int fd;
@@ -613,11 +619,14 @@ static void show_symbol_tab(unsigned int tindex)
 		get_symbol(t, i, sym);
 
 		switch (sym->st_shndx) {
-		case 0xfff1:
+		case SHN_ABS:
 			sprintf(sec_rel, "%s", "ABS");
 			break;
-		case 0:
+		case SHN_UNDEF:
 			sprintf(sec_rel, "%s", "UND");
+			break;
+		case SHN_LOOS ... SHN_HIOS:
+			sprintf(sec_rel, "%s", "OS");
 			break;
 		default:
 			sprintf(sec_rel, "%d", sym->st_shndx);
