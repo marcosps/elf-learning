@@ -613,7 +613,7 @@ static void show_symbol_tab(unsigned int tindex)
 	printf("  Num:                Value       Size       Bind       Type   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
 		struct sym_entry *sym = &t->entries[i];
-		char sec_rel[10] = {};
+		char sec_rel[25] = {};
 		char *sym_type;
 
 		get_symbol(t, i, sym);
@@ -626,7 +626,7 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%s", "UND");
 			break;
 		case SHN_LOOS ... SHN_HIOS:
-			sprintf(sec_rel, "%s", "OS");
+			sprintf(sec_rel, "%s (0x%x)", "OS", sym->st_shndx);
 			break;
 		default:
 			sprintf(sec_rel, "%d", sym->st_shndx);
