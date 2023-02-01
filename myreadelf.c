@@ -15,6 +15,67 @@
 #define SHN_LOOS	0xff20 /* Start index of OS specific sections */
 #define SHN_HIOS	0xff3f /* End index of OS specific sections */
 
+/* AMD x86-64 relocations. Got from elf.h */
+#define R_X86_64_NONE		0	/* No reloc */
+#define R_X86_64_64		1	/* Direct 64 bit  */
+#define R_X86_64_PC32		2	/* PC relative 32 bit signed */
+#define R_X86_64_GOT32		3	/* 32 bit GOT entry */
+#define R_X86_64_PLT32		4	/* 32 bit PLT address */
+#define R_X86_64_COPY		5	/* Copy symbol at runtime */
+#define R_X86_64_GLOB_DAT	6	/* Create GOT entry */
+#define R_X86_64_JUMP_SLOT	7	/* Create PLT entry */
+#define R_X86_64_RELATIVE	8	/* Adjust by program base */
+#define R_X86_64_GOTPCREL	9	/* 32 bit signed PC relative
+					   offset to GOT */
+#define R_X86_64_32		10	/* Direct 32 bit zero extended */
+#define R_X86_64_32S		11	/* Direct 32 bit sign extended */
+#define R_X86_64_16		12	/* Direct 16 bit zero extended */
+#define R_X86_64_PC16		13	/* 16 bit sign extended pc relative */
+#define R_X86_64_8		14	/* Direct 8 bit sign extended  */
+#define R_X86_64_PC8		15	/* 8 bit sign extended pc relative */
+#define R_X86_64_DTPMOD64	16	/* ID of module containing symbol */
+#define R_X86_64_DTPOFF64	17	/* Offset in module's TLS block */
+#define R_X86_64_TPOFF64	18	/* Offset in initial TLS block */
+#define R_X86_64_TLSGD		19	/* 32 bit signed PC relative offset
+					   to two GOT entries for GD symbol */
+#define R_X86_64_TLSLD		20	/* 32 bit signed PC relative offset
+					   to two GOT entries for LD symbol */
+#define R_X86_64_DTPOFF32	21	/* Offset in TLS block */
+#define R_X86_64_GOTTPOFF	22	/* 32 bit signed PC relative offset
+					   to GOT entry for IE symbol */
+#define R_X86_64_TPOFF32	23	/* Offset in initial TLS block */
+#define R_X86_64_PC64		24	/* PC relative 64 bit */
+#define R_X86_64_GOTOFF64	25	/* 64 bit offset to GOT */
+#define R_X86_64_GOTPC32	26	/* 32 bit signed pc relative
+					   offset to GOT */
+#define R_X86_64_GOT64		27	/* 64-bit GOT entry offset */
+#define R_X86_64_GOTPCREL64	28	/* 64-bit PC relative offset
+					   to GOT entry */
+#define R_X86_64_GOTPC64	29	/* 64-bit PC relative offset to GOT */
+#define R_X86_64_GOTPLT64	30 	/* like GOT64, says PLT entry needed */
+#define R_X86_64_PLTOFF64	31	/* 64-bit GOT relative offset
+					   to PLT entry */
+#define R_X86_64_SIZE32		32	/* Size of symbol plus 32-bit addend */
+#define R_X86_64_SIZE64		33	/* Size of symbol plus 64-bit addend */
+#define R_X86_64_GOTPC32_TLSDESC 34	/* GOT offset for TLS descriptor.  */
+#define R_X86_64_TLSDESC_CALL   35	/* Marker for call through TLS
+					   descriptor.  */
+#define R_X86_64_TLSDESC        36	/* TLS descriptor.  */
+#define R_X86_64_IRELATIVE	37	/* Adjust indirectly by program base */
+#define R_X86_64_RELATIVE64	38	/* 64-bit adjust by program base */
+					/* 39 Reserved was R_X86_64_PC32_BND */
+					/* 40 Reserved was R_X86_64_PLT32_BND */
+#define R_X86_64_GOTPCRELX	41	/* Load from 32 bit signed pc relative
+					   offset to GOT entry without REX
+					   prefix, relaxable.  */
+#define R_X86_64_REX_GOTPCRELX	42	/* Load from 32 bit signed pc relative
+					   offset to GOT entry with REX prefix,
+					   relaxable.  */
+#define R_X86_64_NUM		43
+
+/* x86-64 sh_type values.  */
+#define SHT_X86_64_UNWIND	0x70000001 /* Unwind information.  */
+
 static unsigned char *mfile;
 
 static int fd;
@@ -660,9 +721,57 @@ static void get_rel_entry(bool rela, struct sh_entry *she, size_t rel_index,
 		rel->r_addend = get_field(&pos, nbytes);
 }
 
-/*static char *get_rel_type(uint64_t r_info)*/
-/*{*/
-/*}*/
+#define REL_TYPE(val) case val: return #val; break;
+
+static char *get_rel_type(uint64_t r_info)
+{
+	switch (r_info) {
+	REL_TYPE(R_X86_64_NONE)
+	REL_TYPE(R_X86_64_64)
+	REL_TYPE(R_X86_64_PC32)
+	REL_TYPE(R_X86_64_GOT32)
+	REL_TYPE(R_X86_64_PLT32)
+	REL_TYPE(R_X86_64_COPY)
+	REL_TYPE(R_X86_64_GLOB_DAT)
+	REL_TYPE(R_X86_64_JUMP_SLOT)
+	REL_TYPE(R_X86_64_RELATIVE)
+	REL_TYPE(R_X86_64_GOTPCREL)
+	REL_TYPE(R_X86_64_32)
+	REL_TYPE(R_X86_64_32S)
+	REL_TYPE(R_X86_64_16)
+	REL_TYPE(R_X86_64_PC16)
+	REL_TYPE(R_X86_64_8)
+	REL_TYPE(R_X86_64_PC8)
+	REL_TYPE(R_X86_64_DTPMOD64)
+	REL_TYPE(R_X86_64_DTPOFF64)
+	REL_TYPE(R_X86_64_TPOFF64)
+	REL_TYPE(R_X86_64_TLSGD)
+	REL_TYPE(R_X86_64_TLSLD)
+	REL_TYPE(R_X86_64_DTPOFF32)
+	REL_TYPE(R_X86_64_GOTTPOFF)
+	REL_TYPE(R_X86_64_TPOFF32)
+	REL_TYPE(R_X86_64_PC64)
+	REL_TYPE(R_X86_64_GOTOFF64)
+	REL_TYPE(R_X86_64_GOTPC32)
+	REL_TYPE(R_X86_64_GOT64)
+	REL_TYPE(R_X86_64_GOTPCREL64)
+	REL_TYPE(R_X86_64_GOTPC64)
+	REL_TYPE(R_X86_64_GOTPLT64)
+	REL_TYPE(R_X86_64_PLTOFF64)
+	REL_TYPE(R_X86_64_SIZE32)
+	REL_TYPE(R_X86_64_SIZE64)
+	REL_TYPE(R_X86_64_GOTPC32_TLSDESC)
+	REL_TYPE(R_X86_64_TLSDESC_CALL)
+	REL_TYPE(R_X86_64_TLSDESC)
+	REL_TYPE(R_X86_64_IRELATIVE)
+	REL_TYPE(R_X86_64_RELATIVE64)
+	REL_TYPE(R_X86_64_GOTPCRELX)
+	REL_TYPE(R_X86_64_REX_GOTPCRELX)
+	REL_TYPE(R_X86_64_NUM)
+	default:
+		return "missing rel_type...";
+	}
+}
 
 static void show_relocation_sections()
 {
@@ -684,7 +793,7 @@ static void show_relocation_sections()
 		printf("\nRelocation section '%s' with %lu entries:\n",
 				get_section_name(i), rel_num);
 
-		printf("  Offset         Info           Sym. Index   Type           Sym. Value     Sym. Name + Addend\n");
+		printf("  Offset        Info          Sym. Index Type                      Sym. Value     Sym. Name + Addend\n");
 		for (j = 0; j < rel_num; j++) {
 			struct rela_entry entry;
 			struct sym_entry *sym;
@@ -693,11 +802,11 @@ static void show_relocation_sections()
 
 			sym = &tabs[SYMTAB].entries[entry.r_info >> 32];
 
-			printf("  %012lx   %012lx   %10lu   %012lx   %012lx   %s\n",
+			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s\n",
 					entry.r_offset,
 					entry.r_info,
 					entry.r_info >> 32,
-					entry.r_info & 0xffffffff,
+					get_rel_type(entry.r_info & 0xffffffff),
 					sym->st_value,
 					get_symbol_name(sym, SYMTAB)
 			      );
