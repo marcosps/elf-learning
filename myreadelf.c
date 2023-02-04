@@ -372,7 +372,7 @@ static void get_section_flag(uint64_t flags, char *flag_buf)
 	SHF_FLAG(SHF_OS_NONCONFORMING, 'O');
 	SHF_FLAG(SHF_GROUP, 'G');
 	SHF_FLAG(SHF_TLS, 'T');
-	SHF_FLAG(SHF_MASKOS, '?'); //FIXME
+	SHF_FLAG(SHF_MASKOS, 'o'); /* same flag used by readelf */
 	SHF_FLAG(SHF_MASKPROC, '?'); //FIXME
 	SHF_FLAG(SHF_ORDERED, 'O');
 	SHF_FLAG(SHF_EXCLUDE, 'E');
