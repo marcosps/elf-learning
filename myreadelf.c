@@ -210,9 +210,9 @@ static char *get_sh_type(uint64_t type)
 }
 
 #define SYMT(val) case STT_ ## val: return #val
-static char *get_symbol_type(unsigned char info)
+static char *get_symbol_type(struct sym_entry *sym)
 {
-	unsigned char val = info & 0xf;
+	unsigned char val = sym->st_info & 0xf;
 	switch (val) {
 	SYMT(NOTYPE);
 	SYMT(OBJECT);
@@ -607,7 +607,7 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%d", sym->st_shndx);
 		}
 
-		sym_type = get_symbol_type(sym->st_info);
+		sym_type = get_symbol_type(sym);
 
 		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s   %s\n",
 				i,
