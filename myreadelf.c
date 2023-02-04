@@ -722,8 +722,10 @@ static void show_relocation_sections()
 					entry.r_info >> 32,
 					get_rel_type(entry.r_info & 0xffffffff),
 					sym->st_value,
-					get_symbol_name(sym, SYMTAB)
-			      );
+					strncmp(get_symbol_type(sym), "SECTION", 7) == 0
+						? get_section_name(sym->st_shndx)
+						: get_symbol_name(sym, SYMTAB)
+			);
 		}
 	}
 }
