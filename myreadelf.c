@@ -209,28 +209,20 @@ static char *get_sh_type(uint64_t type)
 	}
 }
 
+#define SYMT(val) case STT_ ## val: return #val
 static char *get_symbol_type(unsigned char info)
 {
 	unsigned char val = info & 0xf;
 	switch (val) {
-	case 0:
-		return "NOTYPE";
-	case 1:
-		return "OBJECT";
-	case 2:
-		return "FUNC";
-	case 3:
-		return "SECTION";
-	case 4:
-		return "FILE";
-	case 5:
-		return "COMMON";
-	case 6:
-		return "TLS";
-	case 7:
-		return "NUM";
-	case 10:
-		return "GNU_IFUNC";
+	SYMT(NOTYPE);
+	SYMT(OBJECT);
+	SYMT(FUNC);
+	SYMT(SECTION);
+	SYMT(FILE);
+	SYMT(COMMON);
+	SYMT(TLS);
+	SYMT(NUM);
+	SYMT(GNU_IFUNC);
 	default:
 		return "UNKNOWN";
 	}
