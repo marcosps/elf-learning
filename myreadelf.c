@@ -100,7 +100,12 @@ struct rela_entry {
 	int64_t r_addend;
 };
 
-#define CASEPTYPE(val) case PT_ ##  val: return #val
+/*
+ * Join prefix with val, and stringify val. E.g.
+ * case SHT_NULL: return "NULL";
+ **/
+#define CHECK_VAL(opt, val) case opt: return #val;
+#define CASEPTYPE(val) CHECK_VAL(PT_ ## val, val)
 static char *get_ph_type(int type)
 {
 	switch (type) {
@@ -125,46 +130,46 @@ static char *get_ph_type(int type)
 	}
 }
 
-#define CASETYPE(val) case SHT_ ## val: return #val
+#define CASESTYPE(val) CHECK_VAL(SHT_ ## val, val)
 static char *get_sh_type(uint64_t type)
 {
 	switch (type) {
-	CASETYPE(NULL);
-	CASETYPE(PROGBITS);
-	CASETYPE(SYMTAB);
-	CASETYPE(STRTAB);
-	CASETYPE(RELA);
-	CASETYPE(HASH);
-	CASETYPE(DYNAMIC);
-	CASETYPE(NOTE);
-	CASETYPE(NOBITS);
-	CASETYPE(REL);
-	CASETYPE(SHLIB);
-	CASETYPE(DYNSYM);
-	CASETYPE(INIT_ARRAY);
-	CASETYPE(FINI_ARRAY);
-	CASETYPE(PREINIT_ARRAY);
-	CASETYPE(GROUP);
-	CASETYPE(SYMTAB_SHNDX);
-	CASETYPE(NUM);
-	CASETYPE(LOOS);
-	CASETYPE(GNU_ATTRIBUTES);
-	CASETYPE(GNU_HASH);
-	CASETYPE(GNU_LIBLIST);
-	CASETYPE(CHECKSUM);
-	CASETYPE(GNU_verdef);
-	CASETYPE(GNU_verneed);
-	CASETYPE(GNU_versym);
-	CASETYPE(LOPROC);
-	CASETYPE(HIPROC);
-	CASETYPE(LOUSER);
-	CASETYPE(HIUSER);
+	CASESTYPE(NULL);
+	CASESTYPE(PROGBITS);
+	CASESTYPE(SYMTAB);
+	CASESTYPE(STRTAB);
+	CASESTYPE(RELA);
+	CASESTYPE(HASH);
+	CASESTYPE(DYNAMIC);
+	CASESTYPE(NOTE);
+	CASESTYPE(NOBITS);
+	CASESTYPE(REL);
+	CASESTYPE(SHLIB);
+	CASESTYPE(DYNSYM);
+	CASESTYPE(INIT_ARRAY);
+	CASESTYPE(FINI_ARRAY);
+	CASESTYPE(PREINIT_ARRAY);
+	CASESTYPE(GROUP);
+	CASESTYPE(SYMTAB_SHNDX);
+	CASESTYPE(NUM);
+	CASESTYPE(LOOS);
+	CASESTYPE(GNU_ATTRIBUTES);
+	CASESTYPE(GNU_HASH);
+	CASESTYPE(GNU_LIBLIST);
+	CASESTYPE(CHECKSUM);
+	CASESTYPE(GNU_verdef);
+	CASESTYPE(GNU_verneed);
+	CASESTYPE(GNU_versym);
+	CASESTYPE(LOPROC);
+	CASESTYPE(HIPROC);
+	CASESTYPE(LOUSER);
+	CASESTYPE(HIUSER);
 	default:
 		return "UNKNOWN";
 	}
 }
 
-#define SYMT(val) case STT_ ## val: return #val
+#define SYMT(val) CHECK_VAL(STT_ ## val, val)
 static char *get_symbol_type(struct sym_entry *sym)
 {
 	unsigned char val = sym->st_info & 0xf;
@@ -183,7 +188,7 @@ static char *get_symbol_type(struct sym_entry *sym)
 	}
 }
 
-#define SYMB(val) case STB_ ## val: return #val
+#define SYMB(val) CHECK_VAL(STB_ ## val, val)
 static char *get_symbol_bind(unsigned char info)
 {
 	unsigned char val = info >> 4;
@@ -201,7 +206,7 @@ static char *get_symbol_bind(unsigned char info)
 	}
 }
 
-#define SYMV(val) case STV_ ## val: return #val
+#define SYMV(val) CHECK_VAL(STV_ ## val, val)
 static char *get_symbol_visibility(unsigned char val)
 {
 	switch (val) {
