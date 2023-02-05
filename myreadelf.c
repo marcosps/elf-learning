@@ -100,110 +100,65 @@ struct rela_entry {
 	int64_t r_addend;
 };
 
+#define CASEPTYPE(val) case PT_ ##  val: return #val
 static char *get_ph_type(int type)
 {
 	switch (type) {
-	case 0:
-		return "NULL";
-	case 1:
-		return "LOAD";
-	case 2:
-		return "DYNAMIC";
-	case 3:
-		return "INTEROP";
-	case 4:
-		return "NOTE";
-	case 5:
-		return "SHLIB";
-	case 6:
-		return "PHDR";
-	case 7:
-		return "TLS";
-	case 0x60000000:
-		return "LOOS";
-	case 0x6FFFFFFF:
-		return "HIOS";
-	// begin Defined in elf.h
-	case 0x6474e550:
-		return "GNU_EH_FRAME";
-	case 0x6474e551:
-		return "GNU_STACK";
-	case 0x6474e552:
-		return "GNU_RELRO";
-	// enf defined by elf.h
-	case 0x70000000:
-		return "LOPROC";
-	case 0x7FFFFFFF:
-		return "HIPROC";
+	CASEPTYPE(NULL);
+	CASEPTYPE(LOAD);
+	CASEPTYPE(DYNAMIC);
+	CASEPTYPE(INTERP);
+	CASEPTYPE(NOTE);
+	CASEPTYPE(SHLIB);
+	CASEPTYPE(PHDR);
+	CASEPTYPE(TLS);
+	CASEPTYPE(LOOS);
+	CASEPTYPE(GNU_EH_FRAME);
+	CASEPTYPE(GNU_STACK);
+	CASEPTYPE(GNU_RELRO);
+	CASEPTYPE(GNU_PROPERTY);
+	CASEPTYPE(HIOS);
+	CASEPTYPE(LOPROC);
+	CASEPTYPE(HIPROC);
 	default:
 		return "UNKNOWN";
 	}
 }
 
+#define CASETYPE(val) case SHT_ ## val: return #val
 static char *get_sh_type(uint64_t type)
 {
 	switch (type) {
-	case 0:
-		return "NULL";
-	case 1:
-		return "PROGBITS";
-	case 2:
-		return "SYMTAB";
-	case 3:
-		return "STRTAB";
-	case 4:
-		return "RELA";
-	case 5:
-		return "HASH";
-	case 6:
-		return "DYNAMIC";
-	case 7:
-		return "NOTE";
-	case 8:
-		return "NOBITS";
-	case 9:
-		return "REL";
-	case 10:
-		return "SHLIB";
-	case 11:
-		return "DYNLIB";
-	case 12:
-		return "INIT_ARRAY";
-	case 13:
-		return "FINI_ARRAY";
-	case 14:
-		return "PREINIT_ARRAY";
-	case 15:
-		return "GROUP";
-	case 16:
-		return "SYMTAB_SHNDX";
-	case 17:
-		return "NUM";
-	case 0x60000000:
-		return "LOOS";
-	// begin defined in /usr/include/elf.h
-	case 0x6ffffff5:
-	       return "GNU_ATTRIBUTES";
-	case 0x6ffffff6:
-		return "GNU_HASH";
-	case 0x6ffffff7:
-		return "GNU_LIBLIST";
-	case 0x6ffffff8:
-		return "CHECKSUM";
-	case 0x6ffffffd:
-		return "GNU_verdef";
-	case 0x6ffffffe:
-		return "GNU_verneed";
-	case 0x6fffffff:
-		return "GNU_versym";
-	case 0x70000000:
-		return "LOPROC";
-	case 0x7fffffff:
-		return "HIPROC";
-	case 0x80000000:
-		return "LOUSER";
-	case 0x8fffffff:
-		return "HIUSER";
+	CASETYPE(NULL);
+	CASETYPE(PROGBITS);
+	CASETYPE(SYMTAB);
+	CASETYPE(STRTAB);
+	CASETYPE(RELA);
+	CASETYPE(HASH);
+	CASETYPE(DYNAMIC);
+	CASETYPE(NOTE);
+	CASETYPE(NOBITS);
+	CASETYPE(REL);
+	CASETYPE(SHLIB);
+	CASETYPE(DYNSYM);
+	CASETYPE(INIT_ARRAY);
+	CASETYPE(FINI_ARRAY);
+	CASETYPE(PREINIT_ARRAY);
+	CASETYPE(GROUP);
+	CASETYPE(SYMTAB_SHNDX);
+	CASETYPE(NUM);
+	CASETYPE(LOOS);
+	CASETYPE(GNU_ATTRIBUTES);
+	CASETYPE(GNU_HASH);
+	CASETYPE(GNU_LIBLIST);
+	CASETYPE(CHECKSUM);
+	CASETYPE(GNU_verdef);
+	CASETYPE(GNU_verneed);
+	CASETYPE(GNU_versym);
+	CASETYPE(LOPROC);
+	CASETYPE(HIPROC);
+	CASETYPE(LOUSER);
+	CASETYPE(HIUSER);
 	default:
 		return "UNKNOWN";
 	}
@@ -228,36 +183,47 @@ static char *get_symbol_type(struct sym_entry *sym)
 	}
 }
 
+#define SYMB(val) case STB_ ## val: return #val
 static char *get_symbol_bind(unsigned char info)
 {
 	unsigned char val = info >> 4;
 	switch (val) {
-	case 0:
-		return "LOCAL";
-	case 1:
-		return "GLOBAL";
-	case 2:
-		return "WEAK";
-	case 3:
-		return "NUM";
-	case 10:
-		return "GNU_UNIQUE";
+	SYMB(LOCAL);
+	SYMB(GLOBAL);
+	SYMB(WEAK);
+	SYMB(NUM);
+	SYMB(LOOS);
+	SYMB(HIOS);
+	SYMB(LOPROC);
+	SYMB(HIPROC);
 	default:
 		return "UNKNOWN";
 	}
 }
 
+#define SYMV(val) case STV_ ## val: return #val
 static char *get_symbol_visibility(unsigned char val)
 {
 	switch (val) {
-	case 0:
-		return "DEFAULT";
-	case 1:
-		return "INTERNAL";
-	case 2:
-		return "HIDDEN";
-	case 3:
-		return "PROTECTED";
+	SYMV(DEFAULT);
+	SYMV(INTERNAL);
+	SYMV(HIDDEN);
+	SYMV(PROTECTED);
+	default:
+		return "UNKNOWN";
+	}
+}
+
+#define OBJT(val, str) case ET_ ## val: return str
+static char *get_object_type(int val)
+{
+	switch (val) {
+	OBJT(NONE, "NONE");
+	OBJT(REL, "REL (Relocatable file)");
+	OBJT(EXEC, "EXEC (Executable file)");
+	OBJT(DYN, "DYN (Shared object file)");
+	OBJT(CORE, "CORE (Core File)");
+	OBJT(NUM, "NUM (nr defined types");
 	default:
 		return "UNKNOWN";
 	}
@@ -274,24 +240,6 @@ static uint64_t get_field(size_t *offset, size_t len)
 
 	/* Big enough to store 32 and 64 bit values */
 	return *(uint64_t *)data;
-}
-
-static char *get_object_type(int val)
-{
-	switch (val) {
-	case 0:
-		return "NONE";
-	case 1:
-		return "REL (Relocatable file)";
-	case 2:
-		return "EXEC (Executable file)";
-	case 3:
-		return "DYN (Shared object file)";
-	case 4:
-		return "CORE (Core File)";
-	default:
-		return "UNKNOWN";
-	}
 }
 
 static void get_eh_fields()
