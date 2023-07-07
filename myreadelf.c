@@ -13,8 +13,6 @@
 
 static unsigned char *mfile;
 
-static int fd;
-
 static bool is64bit = false;
 /* Some fields use 8 bytes when in 64bit ELF files */
 static char nbytes;
@@ -710,6 +708,7 @@ static void release_header_tables()
 
 int main(int argc, char **argv)
 {
+	int fd;
 	struct stat st;
 	if (argc != 2)
 		err(1, "Usage: %s <elf file>\n", argv[0]);
