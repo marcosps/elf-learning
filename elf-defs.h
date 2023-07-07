@@ -197,3 +197,281 @@
 #define PT_HIOS		0x6fffffff	/* End of OS-specific */
 #define PT_LOPROC	0x70000000	/* Start of processor-specific */
 #define PT_HIPROC	0x7fffffff	/* End of processor-specific */
+
+#define EI_NIDENT 16
+
+struct elf_header {
+	unsigned char e_ident[EI_NIDENT];
+	int e_type;
+	int e_machine;
+	int e_version;
+	uint64_t e_entry;
+	uint64_t e_phoff;
+	uint64_t e_shoff;
+	int e_flags;
+	int e_ehsize;
+	int e_phentsize;
+	int e_phnum;
+	int e_shentsize;
+	int e_shnum;
+	int e_shstrndx;
+};
+
+struct sh_entry {
+	int sh_name;
+	uint64_t sh_type;
+	int sh_flags;
+	int sh_addr;
+	int sh_offset;
+	int sh_size;
+	int sh_link;
+	int sh_info;
+	int sh_addralign;
+	int sh_entsize;
+};
+
+struct ph_entry {
+	int p_type;
+	int p_flags;
+	uint64_t p_offset;
+	uint64_t p_vaddr;
+	uint64_t p_paddr;
+	uint64_t p_filesz;
+	uint64_t p_memsz;
+	uint64_t p_align;
+};
+
+struct sym_entry {
+	uint32_t st_name;
+	unsigned char st_info;
+	unsigned char st_other;
+	uint16_t st_shndx;
+	uint64_t st_value;
+	uint64_t st_size;
+};
+
+struct sym_tab {
+	unsigned int tab_off;
+	unsigned int tab_len;
+	unsigned int entry_size;
+	unsigned int strtab_off;
+	unsigned int strtab_len;
+	unsigned int nentries;
+	struct sym_entry *entries;
+};
+
+struct rela_entry {
+	uint64_t r_offset;
+	uint64_t r_info;
+	int64_t r_addend;
+};
+
+/* There are only two symbol tables in ELF files: symtab and dyntab */
+#define SYMTAB 0
+#define DYNTAB 1
+
+/*
+ * Join prefix with val, and stringify val. E.g.
+ * case SHT_NULL: return "NULL";
+ **/
+#define CHECK_VAL(opt, val) case opt: return #val;
+#define CASEPTYPE(val) CHECK_VAL(PT_ ## val, val)
+static char *get_ph_type(int type)
+{
+	switch (type) {
+	CASEPTYPE(NULL);
+	CASEPTYPE(LOAD);
+	CASEPTYPE(DYNAMIC);
+	CASEPTYPE(INTERP);
+	CASEPTYPE(NOTE);
+	CASEPTYPE(SHLIB);
+	CASEPTYPE(PHDR);
+	CASEPTYPE(TLS);
+	CASEPTYPE(LOOS);
+	CASEPTYPE(GNU_EH_FRAME);
+	CASEPTYPE(GNU_STACK);
+	CASEPTYPE(GNU_RELRO);
+	CASEPTYPE(GNU_PROPERTY);
+	CASEPTYPE(HIOS);
+	CASEPTYPE(LOPROC);
+	CASEPTYPE(HIPROC);
+	default:
+		return "UNKNOWN";
+	}
+}
+
+#define CASESTYPE(val) CHECK_VAL(SHT_ ## val, val)
+static char *get_sh_type(uint64_t type)
+{
+	switch (type) {
+	CASESTYPE(NULL);
+	CASESTYPE(PROGBITS);
+	CASESTYPE(SYMTAB);
+	CASESTYPE(STRTAB);
+	CASESTYPE(RELA);
+	CASESTYPE(HASH);
+	CASESTYPE(DYNAMIC);
+	CASESTYPE(NOTE);
+	CASESTYPE(NOBITS);
+	CASESTYPE(REL);
+	CASESTYPE(SHLIB);
+	CASESTYPE(DYNSYM);
+	CASESTYPE(INIT_ARRAY);
+	CASESTYPE(FINI_ARRAY);
+	CASESTYPE(PREINIT_ARRAY);
+	CASESTYPE(GROUP);
+	CASESTYPE(SYMTAB_SHNDX);
+	CASESTYPE(NUM);
+	CASESTYPE(LOOS);
+	CASESTYPE(GNU_ATTRIBUTES);
+	CASESTYPE(GNU_HASH);
+	CASESTYPE(GNU_LIBLIST);
+	CASESTYPE(CHECKSUM);
+	CASESTYPE(GNU_verdef);
+	CASESTYPE(GNU_verneed);
+	CASESTYPE(GNU_versym);
+	CASESTYPE(LOPROC);
+	CASESTYPE(HIPROC);
+	CASESTYPE(LOUSER);
+	CASESTYPE(HIUSER);
+	default:
+		return "UNKNOWN";
+	}
+}
+
+#define SYMT(val) CHECK_VAL(STT_ ## val, val)
+static char *get_symbol_type(struct sym_entry *sym)
+{
+	unsigned char val = sym->st_info & 0xf;
+	switch (val) {
+	SYMT(NOTYPE);
+	SYMT(OBJECT);
+	SYMT(FUNC);
+	SYMT(SECTION);
+	SYMT(FILE);
+	SYMT(COMMON);
+	SYMT(TLS);
+	SYMT(NUM);
+	SYMT(GNU_IFUNC);
+	default:
+		return "UNKNOWN";
+	}
+}
+
+#define SYMB(val) CHECK_VAL(STB_ ## val, val)
+static char *get_symbol_bind(unsigned char info)
+{
+	unsigned char val = info >> 4;
+	switch (val) {
+	SYMB(LOCAL);
+	SYMB(GLOBAL);
+	SYMB(WEAK);
+	SYMB(NUM);
+	SYMB(LOOS);
+	SYMB(HIOS);
+	SYMB(LOPROC);
+	SYMB(HIPROC);
+	default:
+		return "UNKNOWN";
+	}
+}
+
+#define SYMV(val) CHECK_VAL(STV_ ## val, val)
+static char *get_symbol_visibility(unsigned char val)
+{
+	switch (val) {
+	SYMV(DEFAULT);
+	SYMV(INTERNAL);
+	SYMV(HIDDEN);
+	SYMV(PROTECTED);
+	default:
+		return "UNKNOWN";
+	}
+}
+
+#define OBJT(val, str) case ET_ ## val: return str
+static char *get_object_type(int val)
+{
+	switch (val) {
+	OBJT(NONE, "NONE");
+	OBJT(REL, "REL (Relocatable file)");
+	OBJT(EXEC, "EXEC (Executable file)");
+	OBJT(DYN, "DYN (Shared object file)");
+	OBJT(CORE, "CORE (Core File)");
+	OBJT(NUM, "NUM (nr defined types");
+	default:
+		return "UNKNOWN";
+	}
+}
+
+#define SHF_FLAG(val, ch) if (flags & val) flag_buf[pos++] = ch;
+static void get_section_flag(uint64_t flags, char *flag_buf)
+{
+	int pos = 0;
+
+	SHF_FLAG(SHF_WRITE, 'W');
+	SHF_FLAG(SHF_ALLOC, 'A');
+	SHF_FLAG(SHF_EXECINSTR, 'E');
+	SHF_FLAG(SHF_MERGE, 'M');
+	SHF_FLAG(SHF_STRINGS, 'S');
+	SHF_FLAG(SHF_INFO_LINK, 'I');
+	SHF_FLAG(SHF_LINK_ORDER, 'L');
+	SHF_FLAG(SHF_OS_NONCONFORMING, 'O');
+	SHF_FLAG(SHF_GROUP, 'G');
+	SHF_FLAG(SHF_TLS, 'T');
+	SHF_FLAG(SHF_MASKOS, 'o'); /* same flag used by readelf */
+	SHF_FLAG(SHF_MASKPROC, '?'); //FIXME
+	SHF_FLAG(SHF_ORDERED, 'O');
+	SHF_FLAG(SHF_EXCLUDE, 'E');
+}
+
+#define REL_TYPE(val) case val: return #val; break;
+static char *get_rel_type(uint64_t r_info)
+{
+	switch (r_info) {
+	REL_TYPE(R_X86_64_NONE)
+	REL_TYPE(R_X86_64_64)
+	REL_TYPE(R_X86_64_PC32)
+	REL_TYPE(R_X86_64_GOT32)
+	REL_TYPE(R_X86_64_PLT32)
+	REL_TYPE(R_X86_64_COPY)
+	REL_TYPE(R_X86_64_GLOB_DAT)
+	REL_TYPE(R_X86_64_JUMP_SLOT)
+	REL_TYPE(R_X86_64_RELATIVE)
+	REL_TYPE(R_X86_64_GOTPCREL)
+	REL_TYPE(R_X86_64_32)
+	REL_TYPE(R_X86_64_32S)
+	REL_TYPE(R_X86_64_16)
+	REL_TYPE(R_X86_64_PC16)
+	REL_TYPE(R_X86_64_8)
+	REL_TYPE(R_X86_64_PC8)
+	REL_TYPE(R_X86_64_DTPMOD64)
+	REL_TYPE(R_X86_64_DTPOFF64)
+	REL_TYPE(R_X86_64_TPOFF64)
+	REL_TYPE(R_X86_64_TLSGD)
+	REL_TYPE(R_X86_64_TLSLD)
+	REL_TYPE(R_X86_64_DTPOFF32)
+	REL_TYPE(R_X86_64_GOTTPOFF)
+	REL_TYPE(R_X86_64_TPOFF32)
+	REL_TYPE(R_X86_64_PC64)
+	REL_TYPE(R_X86_64_GOTOFF64)
+	REL_TYPE(R_X86_64_GOTPC32)
+	REL_TYPE(R_X86_64_GOT64)
+	REL_TYPE(R_X86_64_GOTPCREL64)
+	REL_TYPE(R_X86_64_GOTPC64)
+	REL_TYPE(R_X86_64_GOTPLT64)
+	REL_TYPE(R_X86_64_PLTOFF64)
+	REL_TYPE(R_X86_64_SIZE32)
+	REL_TYPE(R_X86_64_SIZE64)
+	REL_TYPE(R_X86_64_GOTPC32_TLSDESC)
+	REL_TYPE(R_X86_64_TLSDESC_CALL)
+	REL_TYPE(R_X86_64_TLSDESC)
+	REL_TYPE(R_X86_64_IRELATIVE)
+	REL_TYPE(R_X86_64_RELATIVE64)
+	REL_TYPE(R_X86_64_GOTPCRELX)
+	REL_TYPE(R_X86_64_REX_GOTPCRELX)
+	REL_TYPE(R_X86_64_NUM)
+	default:
+		return "missing rel_type...";
+	}
+}
