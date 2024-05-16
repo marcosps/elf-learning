@@ -78,7 +78,7 @@ static void show_tracing_fentries()
 
 		while (pf.trace_offset < end) {
 			p = get_field(&pf.trace_offset, 8);
-			printf("  %s\n", find_symbol_by_value(p));
+			printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
 		}
 	}
 	pf = pfuncs[PATCHABLE_FUNCTION_ENTRIES];
@@ -88,7 +88,7 @@ static void show_tracing_fentries()
 
 		while (pf.trace_offset < end) {
 			p = get_field(&pf.trace_offset, 8);
-			printf("  %s\n", find_symbol_by_value(p));
+			printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
 		}
 	}
 }
