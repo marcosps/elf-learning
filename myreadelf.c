@@ -20,6 +20,13 @@ static char nbytes;
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
 
+struct patchable_funcs {
+	unsigned long trace_offset;
+	unsigned int trace_len;
+};
+
+static struct patchable_funcs pfuncs[2] = {};
+
 static struct elf_header eh;
 static struct sh_entry *sh_entries = NULL;
 static struct ph_entry *ph_entries = NULL;
@@ -36,6 +43,54 @@ static uint64_t get_field(size_t *offset, size_t len)
 
 	/* Big enough to store 32 and 64 bit values */
 	return *(uint64_t *)data;
+}
+
+static char *get_symbol_name(struct sym_entry *sym, unsigned int tindex)
+{
+	return (char *)(mfile + tabs[tindex].strtab_off + sym->st_name);
+}
+
+static char *find_symbol_by_value(long unsigned int value)
+{
+	int tab = SYMTAB;
+	while (tab <= DYNTAB) {
+		struct sym_tab *t = &tabs[tab];
+		unsigned int i;
+		for (i = 0; i < t->nentries; i++) {
+			struct sym_entry *sym = &t->entries[i];
+			if (sym->st_value == value)
+				return get_symbol_name(sym, tab);
+
+		}
+		tab++;
+	}
+	return NULL;
+}
+
+static void show_tracing_fentries()
+{
+	unsigned long p;
+
+	struct patchable_funcs pf = pfuncs[MCOUNT_LOC];
+	if (pf.trace_offset) {
+		unsigned long end = pf.trace_offset + pf.trace_len;
+		printf("\nTraceable symbols (__mcount_loc):\n");
+
+		while (pf.trace_offset < end) {
+			p = get_field(&pf.trace_offset, 8);
+			printf("  %s\n", find_symbol_by_value(p));
+		}
+	}
+	pf = pfuncs[PATCHABLE_FUNCTION_ENTRIES];
+	if (pf.trace_offset) {
+		unsigned long end = pf.trace_offset + pf.trace_len;
+		printf("\nTraceable symbols (__patchable_function_entries):\n");
+
+		while (pf.trace_offset < end) {
+			p = get_field(&pf.trace_offset, 8);
+			printf("  %s\n", find_symbol_by_value(p));
+		}
+	}
 }
 
 static void get_eh_fields()
@@ -235,6 +290,12 @@ static void show_section_headers()
 		} else if (strncmp(sec_name, ".dynstr", 7) == 0) {
 			tabs[DYNTAB].strtab_off = entry->sh_offset;
 			tabs[DYNTAB].strtab_len = entry->sh_size;
+		} else if (strncmp(sec_name, "__patchable_function_entries", 28) == 0) {
+			pfuncs[PATCHABLE_FUNCTION_ENTRIES].trace_offset = entry->sh_offset;
+			pfuncs[PATCHABLE_FUNCTION_ENTRIES].trace_len = entry->sh_size;
+		} else if (strncmp(sec_name, "__mcount_loc", 12) == 0) {
+			pfuncs[MCOUNT_LOC].trace_offset = entry->sh_offset;
+			pfuncs[MCOUNT_LOC].trace_len = entry->sh_size;
 		}
 
 		printf("  [%4d]   %-30s   %-16s   %016d   %-d\n"
@@ -288,11 +349,6 @@ static void get_symbol(struct sym_tab *t, size_t sym_index, struct sym_entry *en
 		entry->st_other = get_field(&pos, 1);
 		entry->st_shndx = get_field(&pos, 2);
 	}
-}
-
-static char *get_symbol_name(struct sym_entry *sym, unsigned int tindex)
-{
-	return (char *)(mfile + tabs[tindex].strtab_off + sym->st_name);
 }
 
 static void show_symbol_tab(unsigned int tindex)
@@ -456,6 +512,8 @@ int main(int argc, char **argv)
 
 	show_symbol_tab(DYNTAB);
 	show_symbol_tab(SYMTAB);
+
+	show_tracing_fentries();
 
 	show_relocation_sections();
 

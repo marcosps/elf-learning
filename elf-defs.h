@@ -270,6 +270,9 @@ struct rela_entry {
 #define SYMTAB 0
 #define DYNTAB 1
 
+#define MCOUNT_LOC 0
+#define PATCHABLE_FUNCTION_ENTRIES 1
+
 /*
  * Join prefix with val, and stringify val. E.g.
  * case SHT_NULL: return "NULL";
