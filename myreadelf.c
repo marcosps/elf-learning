@@ -20,17 +20,19 @@ static char nbytes;
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
 
-struct patchable_funcs {
-	unsigned long trace_offset;
-	unsigned int trace_len;
-};
-
-static struct patchable_funcs pfuncs[2] = {};
-
 static struct elf_header eh;
 static struct sh_entry *sh_entries = NULL;
 static struct ph_entry *ph_entries = NULL;
-static struct sym_tab tabs[2] = {};
+
+static struct patchable_funcs pfuncs[2] = {
+	{ .type = MCOUNT_LOC, .desc = "__mcount_loc" },
+	{ .type = PATCHABLE_FUNCTION_ENTRIES, .desc = "__patchable_function_entries" },
+};
+
+static struct sym_tab tabs[2] = {
+	{ .type = SYMTAB, .desc = "symtab", },
+	{ .type = DYNTAB, .desc = "dyntab", },
+};
 
 /* Get value mfile starting from offset + len */
 static uint64_t get_field(size_t *offset, size_t len)
@@ -70,26 +72,20 @@ static char *find_symbol_by_value(long unsigned int value)
 static void show_tracing_fentries()
 {
 	unsigned long p;
+	int tab = MCOUNT_LOC;
 
-	struct patchable_funcs pf = pfuncs[MCOUNT_LOC];
-	if (pf.trace_offset) {
-		unsigned long end = pf.trace_offset + pf.trace_len;
-		printf("\nTraceable symbols (__mcount_loc):\n");
+	while (tab < LAST_PATCH_SECTION) {
+		struct patchable_funcs pf = pfuncs[tab];
+		if (pf.trace_offset) {
+			unsigned long end = pf.trace_offset + pf.trace_len;
+			printf("\nTraceable symbols (%s):\n", pf.desc);
 
-		while (pf.trace_offset < end) {
-			p = get_field(&pf.trace_offset, 8);
-			printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
+			while (pf.trace_offset < end) {
+				p = get_field(&pf.trace_offset, 8);
+				printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
+			}
 		}
-	}
-	pf = pfuncs[PATCHABLE_FUNCTION_ENTRIES];
-	if (pf.trace_offset) {
-		unsigned long end = pf.trace_offset + pf.trace_len;
-		printf("\nTraceable symbols (__patchable_function_entries):\n");
-
-		while (pf.trace_offset < end) {
-			p = get_field(&pf.trace_offset, 8);
-			printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
-		}
+		tab++;
 	}
 }
 
@@ -361,9 +357,9 @@ static void show_symbol_tab(unsigned int tindex)
 
 	t->entries = malloc(sizeof(struct sym_entry) * t->nentries);
 	if (!t->entries)
-		err(1, "malloc %s", tindex == SYMTAB ? "symtab" : "dyntab");
+		err(1, "malloc %s", tabs[tindex].desc);
 
-	printf("\nSymbol Table (.%s):\n", tindex == SYMTAB ? "symtab" : "dyntab");
+	printf("\nSymbol Table (.%s):\n", tabs[tindex].desc);
 	printf("  Num:                Value       Size       Bind       Type   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
 		struct sym_entry *sym = &t->entries[i];

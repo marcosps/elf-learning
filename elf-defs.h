@@ -250,7 +250,15 @@ struct sym_entry {
 	uint64_t st_size;
 };
 
+/* There are only two symbol tables in ELF files: symtab and dyntab */
+enum SymbleTables {
+	SYMTAB,
+	DYNTAB,
+};
+
 struct sym_tab {
+	int type;
+	char *desc;
 	unsigned int tab_off;
 	unsigned int tab_len;
 	unsigned int entry_size;
@@ -266,12 +274,19 @@ struct rela_entry {
 	int64_t r_addend;
 };
 
-/* There are only two symbol tables in ELF files: symtab and dyntab */
-#define SYMTAB 0
-#define DYNTAB 1
 
-#define MCOUNT_LOC 0
-#define PATCHABLE_FUNCTION_ENTRIES 1
+enum patch_sections {
+	MCOUNT_LOC,
+	PATCHABLE_FUNCTION_ENTRIES,
+	LAST_PATCH_SECTION,
+};
+
+struct patchable_funcs {
+	int type;
+	char *desc;
+	unsigned long trace_offset;
+	unsigned int trace_len;
+};
 
 /*
  * Join prefix with val, and stringify val. E.g.
