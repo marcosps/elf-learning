@@ -74,11 +74,14 @@ static void show_tracing_fentries()
 		struct patchable_funcs pf = pfuncs[i];
 		if (pf.len > 0) {
 			unsigned long end = pf.offset + pf.len;
-			printf("\nTraceable symbols (%s) on offset %lx:\n",
-					patch_tabs[pf.type], pf.offset);
+			size_t data_len = sizeof(unsigned long *);
+			unsigned long nentries = (end - pf.offset) / data_len;
+			printf("\nFound %lu traceable symbol(s) on section %s, starting on offset %lx:\n",
+					nentries, patch_tabs[pf.type], pf.offset);
 
 			while (pf.offset < end) {
-				unsigned long p = get_field(&pf.offset, 8);
+				/* each pointer has 8 bytes */
+				unsigned long p = get_field(&pf.offset, data_len);
 				printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
 			}
 		} else {
