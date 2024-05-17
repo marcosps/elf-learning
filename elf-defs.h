@@ -274,18 +274,20 @@ struct rela_entry {
 	int64_t r_addend;
 };
 
-
 enum patch_sections {
 	MCOUNT_LOC,
 	PATCHABLE_FUNCTION_ENTRIES,
-	LAST_PATCH_SECTION,
+};
+
+char *patch_tabs[] = {
+	"__mcount_loc" ,
+	"__patchable_function_entries",
 };
 
 struct patchable_funcs {
 	int type;
-	char *desc;
-	unsigned long trace_offset;
-	unsigned int trace_len;
+	unsigned long offset;
+	unsigned int len;
 };
 
 /*

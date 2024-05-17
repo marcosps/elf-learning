@@ -24,10 +24,9 @@ static struct elf_header eh;
 static struct sh_entry *sh_entries = NULL;
 static struct ph_entry *ph_entries = NULL;
 
-static struct patchable_funcs pfuncs[2] = {
-	{ .type = MCOUNT_LOC, .desc = "__mcount_loc" },
-	{ .type = PATCHABLE_FUNCTION_ENTRIES, .desc = "__patchable_function_entries" },
-};
+static size_t patchable_num;
+/* Is 1024 mcount entries enough? */
+static struct patchable_funcs pfuncs[1024];
 
 static struct sym_tab tabs[2] = {
 	{ .type = SYMTAB, .desc = "symtab", },
@@ -71,21 +70,21 @@ static char *find_symbol_by_value(long unsigned int value)
 
 static void show_tracing_fentries()
 {
-	unsigned long p;
-	int tab = MCOUNT_LOC;
+	for (size_t i = 0; i < patchable_num; i++) {
+		struct patchable_funcs pf = pfuncs[i];
+		if (pf.len > 0) {
+			unsigned long end = pf.offset + pf.len;
+			printf("\nTraceable symbols (%s) on offset %lx:\n",
+					patch_tabs[pf.type], pf.offset);
 
-	while (tab < LAST_PATCH_SECTION) {
-		struct patchable_funcs pf = pfuncs[tab];
-		if (pf.trace_offset) {
-			unsigned long end = pf.trace_offset + pf.trace_len;
-			printf("\nTraceable symbols (%s):\n", pf.desc);
-
-			while (pf.trace_offset < end) {
-				p = get_field(&pf.trace_offset, 8);
+			while (pf.offset < end) {
+				unsigned long p = get_field(&pf.offset, 8);
 				printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
 			}
+		} else {
+			printf("\nSection %s at offset %lu has no content: sh_size is zero\n",
+					patch_tabs[pf.type], pf.offset);
 		}
-		tab++;
 	}
 }
 
@@ -287,15 +286,19 @@ static void show_section_headers()
 			tabs[DYNTAB].strtab_off = entry->sh_offset;
 			tabs[DYNTAB].strtab_len = entry->sh_size;
 		} else if (strncmp(sec_name, "__patchable_function_entries", 28) == 0) {
-			pfuncs[PATCHABLE_FUNCTION_ENTRIES].trace_offset = entry->sh_offset;
-			pfuncs[PATCHABLE_FUNCTION_ENTRIES].trace_len = entry->sh_size;
+			pfuncs[patchable_num].type = PATCHABLE_FUNCTION_ENTRIES;
+			pfuncs[patchable_num].offset = entry->sh_offset,
+			pfuncs[patchable_num].len = entry->sh_size;
+			patchable_num++;
 		} else if (strncmp(sec_name, "__mcount_loc", 12) == 0) {
-			pfuncs[MCOUNT_LOC].trace_offset = entry->sh_offset;
-			pfuncs[MCOUNT_LOC].trace_len = entry->sh_size;
+			pfuncs[patchable_num].type = MCOUNT_LOC;
+			pfuncs[patchable_num].offset = entry->sh_offset,
+			pfuncs[patchable_num].len = entry->sh_size;
+			patchable_num++;
 		}
 
-		printf("  [%4d]   %-30s   %-16s   %016d   %-d\n"
-		       "           %030d   %016d   %-5s   %-4d   %-4d   %-d\n",
+		printf("  [%4d]   %-30s   %-16s   %016d   %-x\n"
+		       "           %030x   %016d   %-5s   %-4d   %-4d   %-d\n",
 				i,
 				sec_name,
 				get_sh_type(entry->sh_type),
