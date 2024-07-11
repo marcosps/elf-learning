@@ -445,7 +445,7 @@ static void show_relocation_sections()
 
 			sym = &tabs[SYMTAB].entries[entry.r_info >> 32];
 
-			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s\n",
+			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s %s%ld\n",
 					entry.r_offset,
 					entry.r_info,
 					entry.r_info >> 32,
@@ -453,7 +453,9 @@ static void show_relocation_sections()
 					sym->st_value,
 					strncmp(get_symbol_type(sym), "SECTION", 7) == 0
 						? get_section_name(sym->st_shndx)
-						: get_symbol_name(sym, SYMTAB)
+						: get_symbol_name(sym, SYMTAB),
+					(entry.r_addend > -1) ? "+" : "",
+					entry.r_addend
 			);
 		}
 	}
