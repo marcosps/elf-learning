@@ -200,6 +200,9 @@
 
 #define EI_NIDENT 16
 
+// Copied from linux/elf.h
+#define SHN_LIVEPATCH   0xff20
+
 struct elf_header {
 	unsigned char e_ident[EI_NIDENT];
 	int e_type;

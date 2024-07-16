@@ -382,7 +382,10 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%s", "UND");
 			break;
 		case SHN_LOOS ... SHN_HIOS:
-			sprintf(sec_rel, "%s (0x%x)", "OS", sym->st_shndx);
+			if (sym->st_shndx == SHN_LIVEPATCH)
+				sprintf(sec_rel, "OS (livepatch)");
+			else
+				sprintf(sec_rel, "OS (0x%x)", sym->st_shndx);
 			break;
 		default:
 			sprintf(sec_rel, "%d", sym->st_shndx);
