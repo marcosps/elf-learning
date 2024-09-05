@@ -336,21 +336,18 @@ static void get_symbol(struct sym_tab *t, size_t sym_index, struct sym_entry *en
 {
 	size_t pos = t->tab_off + (sym_index * t->entry_size);
 
-	entry->st_name = get_field(&pos, 4);
-
+	/* sym_entry is already on Elf64_Sym layout */
 	if (is64bit) {
-		entry->st_info = get_field(&pos, 1);
-		entry->st_other = get_field(&pos, 1);
-		entry->st_shndx = get_field(&pos, 2);
-		entry->st_value = get_field(&pos, 8);
-		entry->st_size = get_field(&pos, 8);
-	} else {
-		entry->st_value = get_field(&pos, 4);
-		entry->st_size = get_field(&pos, 4);
-		entry->st_info = get_field(&pos, 1);
-		entry->st_other = get_field(&pos, 1);
-		entry->st_shndx = get_field(&pos, 2);
+		memcpy(entry, mfile + pos, sizeof(struct sym_entry));
+		return;
 	}
+
+	entry->st_name = get_field(&pos, 4);
+	entry->st_value = get_field(&pos, 4);
+	entry->st_size = get_field(&pos, 4);
+	entry->st_info = get_field(&pos, 1);
+	entry->st_other = get_field(&pos, 1);
+	entry->st_shndx = get_field(&pos, 2);
 }
 
 static void show_symbol_tab(unsigned int tindex)
