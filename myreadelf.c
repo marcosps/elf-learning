@@ -409,11 +409,10 @@ static void get_rel_entry(bool rela, struct sh_entry *she, size_t rel_index,
 {
 	size_t pos = she->sh_offset + (rel_index * she->sh_entsize);
 
-	rel->r_offset = get_field(&pos, nbytes);
-	rel->r_info = get_field(&pos, nbytes);
-
 	if (rela)
-		rel->r_addend = get_field(&pos, nbytes);
+		memcpy(rel, mfile + pos, 3 * nbytes);
+	else
+		memcpy(rel, mfile + pos, 2 * nbytes);
 }
 
 static void show_relocation_sections()
