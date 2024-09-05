@@ -365,8 +365,8 @@ static void show_symbol_tab(unsigned int tindex)
 	if (!t->entries)
 		err(1, "malloc %s", tabs[tindex].desc);
 
-	printf("\nSymbol Table (.%s):\n", tabs[tindex].desc);
-	printf("  Num:                Value       Size       Bind       Type   Visibility   RelToSection   Name\n");
+	printf("\nSymbol Table (.%s) contains %d entries:\n", tabs[tindex].desc, t->nentries);
+	printf("  Num:                Value       Size       Type       Bind   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
 		struct sym_entry *sym = &t->entries[i];
 		char sec_rel[25] = {};
@@ -397,8 +397,8 @@ static void show_symbol_tab(unsigned int tindex)
 				i,
 				sym->st_value,
 				sym->st_size,
-				get_symbol_bind(sym->st_info),
 				sym_type,
+				get_symbol_bind(sym->st_info),
 				get_symbol_visibility(sym->st_other),
 				sec_rel,
 				strncmp(sym_type, "SECTION", 7) == 0
