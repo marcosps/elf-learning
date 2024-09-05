@@ -36,14 +36,14 @@ static struct sym_tab tabs[2] = {
 /* Get value mfile starting from offset + len */
 static uint64_t get_field(size_t *offset, size_t len)
 {
-	unsigned char data[9] = {0};
+	uint64_t data = 0;
 
-	memcpy(data, mfile + *offset, len);
+	memcpy(&data, mfile + *offset, len);
 
 	*offset += len;
 
 	/* Big enough to store 32 and 64 bit values */
-	return *(uint64_t *)data;
+	return data;
 }
 
 static char *get_symbol_name(struct sym_entry *sym, unsigned int tindex)
