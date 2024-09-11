@@ -244,13 +244,22 @@ struct ph_entry {
 	uint64_t p_align;
 };
 
-struct sym_entry {
+struct sym_entry_64 {
 	uint32_t st_name;
 	unsigned char st_info;
 	unsigned char st_other;
 	uint16_t st_shndx;
 	uint64_t st_value;
 	uint64_t st_size;
+};
+
+struct sym_entry_32 {
+	uint32_t st_name;
+	uint32_t st_value;
+	uint32_t st_size;
+	unsigned char st_info;
+	unsigned char st_other;
+	uint16_t st_shndx;
 };
 
 /* There are only two symbol tables in ELF files: symtab and dyntab */
@@ -268,7 +277,7 @@ struct sym_tab {
 	unsigned int strtab_off;
 	unsigned int strtab_len;
 	unsigned int nentries;
-	struct sym_entry *entries;
+	void *entries[] __attribute__((counted_by(nentries)));
 };
 
 struct rela_entry {

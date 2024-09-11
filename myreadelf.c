@@ -17,6 +17,9 @@ static bool is64bit = false;
 /* Some fields use 8 bytes when in 64bit ELF files */
 static char nbytes;
 
+/* Size of the symbol table entry */
+size_t sym_size;
+
 static unsigned int modinfo_off;
 static unsigned int modinfo_len;
 
@@ -28,10 +31,7 @@ static size_t patchable_num;
 /* Is 1024 mcount entries enough? */
 static struct patchable_funcs pfuncs[1024];
 
-static struct sym_tab tabs[2] = {
-	{ .type = SYMTAB, .desc = "symtab", },
-	{ .type = DYNTAB, .desc = "dyntab", },
-};
+static struct sym_tab *tabs[2];
 
 /* Get value mfile starting from offset + len */
 static uint64_t get_field(size_t *offset, size_t len)
@@ -48,17 +48,21 @@ static uint64_t get_field(size_t *offset, size_t len)
 
 static char *get_symbol_name(uint32_t st_name, unsigned int tindex)
 {
-	return (char *)(mfile + tabs[tindex].strtab_off + st_name);
+	return (char *)(mfile + tabs[tindex]->strtab_off + st_name);
 }
 
 #define SYM_FIELD(sym, field) \
-	((struct sym_entry *)sym)->field
+	is64bit ? ((struct sym_entry_64 *)sym)->field : ((struct sym_entry_32 *)sym)->field
+
+#define SYM_OBJ(_tab, _index) \
+	is64bit ? (void *)&((struct sym_entry_64 *)_tab->entries)[_index] : \
+		  (void *)&((struct sym_entry_32 *)_tab->entries)[_index]
 
 static char *find_symbol_by_value(long unsigned int value)
 {
 	int tab = SYMTAB;
 	while (tab <= DYNTAB) {
-		struct sym_tab *t = &tabs[tab];
+		struct sym_tab *t = tabs[tab];
 		unsigned int i;
 		for (i = 0; i < t->nentries; i++) {
 			void *sym = &t->entries[i];
@@ -109,6 +113,7 @@ static void get_eh_fields()
 
 	/* The number of bytes of some fields in the Elf Header. */
 	nbytes = is64bit ? 8 : 4;
+	sym_size = is64bit ? sizeof(struct sym_entry_64) : sizeof(struct sym_entry_32);
 
 	eh.e_entry = get_field(&pos, nbytes);
 	eh.e_phoff = get_field(&pos, nbytes);
@@ -264,6 +269,7 @@ static void show_section_headers()
 	for (i = 0; i < eh.e_shnum; i++) {
 		char *sec_name;
 		char flag_buf[15] = {};
+		size_t nentries;
 
 		entry = &sh_entries[i];
 		sec_name = get_section_name(i);
@@ -273,23 +279,29 @@ static void show_section_headers()
 			modinfo_off = entry->sh_offset;
 			modinfo_len = entry->sh_size;
 		} else if (strncmp(sec_name, ".symtab", 7) == 0) {
-			tabs[SYMTAB].tab_off = entry->sh_offset;
-			tabs[SYMTAB].tab_len = entry->sh_size;
-			tabs[SYMTAB].entry_size = entry->sh_entsize;
-			tabs[SYMTAB].nentries = tabs[SYMTAB].tab_len /
-						tabs[SYMTAB].entry_size;
+			nentries = entry->sh_size / entry->sh_entsize;
+			tabs[SYMTAB] = malloc(sizeof(struct sym_tab) + nentries * sym_size);
+			tabs[SYMTAB]->desc = "symtab";
+			tabs[SYMTAB]->tab_off = entry->sh_offset;
+			tabs[SYMTAB]->tab_len = entry->sh_size;
+			tabs[SYMTAB]->entry_size = entry->sh_entsize;
+			tabs[SYMTAB]->nentries = nentries;
+
 		} else if (strncmp(sec_name, ".strtab", 7) == 0) {
-			tabs[SYMTAB].strtab_off = entry->sh_offset;
-			tabs[SYMTAB].strtab_len = entry->sh_size;
+			tabs[SYMTAB]->strtab_off = entry->sh_offset;
+			tabs[SYMTAB]->strtab_len = entry->sh_size;
 		} else if (strncmp(sec_name, ".dynsym", 7) == 0) {
-			tabs[DYNTAB].tab_off = entry->sh_offset;
-			tabs[DYNTAB].tab_len = entry->sh_size;
-			tabs[DYNTAB].entry_size = entry->sh_entsize;
-			tabs[DYNTAB].nentries = tabs[DYNTAB].tab_len /
-						tabs[DYNTAB].entry_size;
+			nentries = entry->sh_size / entry->sh_entsize;
+			tabs[DYNTAB] = malloc(sizeof(struct sym_tab) + nentries * sym_size);
+			tabs[SYMTAB]->desc = "dyntab";
+			tabs[DYNTAB]->tab_off = entry->sh_offset;
+			tabs[DYNTAB]->tab_len = entry->sh_size;
+			tabs[DYNTAB]->entry_size = entry->sh_entsize;
+			tabs[DYNTAB]->nentries = nentries;
+
 		} else if (strncmp(sec_name, ".dynstr", 7) == 0) {
-			tabs[DYNTAB].strtab_off = entry->sh_offset;
-			tabs[DYNTAB].strtab_len = entry->sh_size;
+			tabs[DYNTAB]->strtab_off = entry->sh_offset;
+			tabs[DYNTAB]->strtab_len = entry->sh_size;
 		} else if (strncmp(sec_name, "__patchable_function_entries", 28) == 0) {
 			pfuncs[patchable_num].type = PATCHABLE_FUNCTION_ENTRIES;
 			pfuncs[patchable_num].offset = entry->sh_offset,
@@ -334,37 +346,21 @@ static void show_modinfo()
 	} while (cur_len < modinfo_end);
 }
 
-static void get_symbol(struct sym_tab *t, size_t sym_index, struct sym_entry *entry)
+static void get_symbol(struct sym_tab *t, size_t sym_index, void *entry)
 {
 	size_t pos = t->tab_off + (sym_index * t->entry_size);
-
-	/* sym_entry is already on Elf64_Sym layout */
-	if (is64bit) {
-		memcpy(entry, mfile + pos, sizeof(struct sym_entry));
-		return;
-	}
-
-	entry->st_name = get_field(&pos, 4);
-	entry->st_value = get_field(&pos, 4);
-	entry->st_size = get_field(&pos, 4);
-	entry->st_info = get_field(&pos, 1);
-	entry->st_other = get_field(&pos, 1);
-	entry->st_shndx = get_field(&pos, 2);
+	memcpy(entry, mfile + pos, sym_size);
 }
 
 static void show_symbol_tab(unsigned int tindex)
 {
-	struct sym_tab *t = &tabs[tindex];
+	struct sym_tab *t = tabs[tindex];
 	unsigned int i;
 
-	if (t->nentries == 0)
+	if (!t || t->nentries == 0)
 		return;
 
-	t->entries = malloc(sizeof(struct sym_entry) * t->nentries);
-	if (!t->entries)
-		err(1, "malloc %s", tabs[tindex].desc);
-
-	printf("\nSymbol Table (.%s) contains %d entries:\n", tabs[tindex].desc, t->nentries);
+	printf("\nSymbol Table (.%s) contains %d entries:\n", tabs[tindex]->desc, t->nentries);
 	printf("  Num:                Value       Size       Type       Bind   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
 		void *sym = &t->entries[i];
@@ -443,16 +439,18 @@ static void show_relocation_sections()
 		printf("  Offset        Info          Sym. Index Type                      Sym. Value     Sym. Name + Addend\n");
 		for (j = 0; j < rel_num; j++) {
 			struct rela_entry entry;
-			void *sym;
+			size_t rela_sym;
 
 			get_rel_entry(is_rela, she, j, &entry);
 
-			sym = &tabs[SYMTAB].entries[entry.r_info >> 32];
+			rela_sym = is64bit ? entry.r_info >> 32 : entry.r_info >> 8;
+
+			void *sym = SYM_OBJ(tabs[SYMTAB], rela_sym);
 
 			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s %s%ld\n",
 					entry.r_offset,
 					entry.r_info,
-					entry.r_info >> 32,
+					rela_sym,
 					get_rel_type(entry.r_info & 0xffffffff),
 					SYM_FIELD(sym, st_value),
 					strncmp(get_symbol_type(SYM_FIELD(sym, st_info)), "SECTION", 7) == 0
@@ -484,10 +482,8 @@ static void release_header_tables()
 {
 	free(sh_entries);
 	free(ph_entries);
-	if (tabs[DYNTAB].nentries > 0)
-		free(tabs[DYNTAB].entries);
-	if (tabs[SYMTAB].nentries > 0)
-		free(tabs[SYMTAB].entries);
+	free(tabs[DYNTAB]);
+	free(tabs[SYMTAB]);
 }
 
 int main(int argc, char **argv)
