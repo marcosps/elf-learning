@@ -363,9 +363,9 @@ static char *get_sh_type(uint64_t type)
 }
 
 #define SYMT(val) CHECK_VAL(STT_ ## val, val)
-static char *get_symbol_type(struct sym_entry *sym)
+static char *get_symbol_type(unsigned char st_info)
 {
-	unsigned char val = sym->st_info & 0xf;
+	unsigned char val = st_info & 0xf;
 	switch (val) {
 	SYMT(NOTYPE);
 	SYMT(OBJECT);

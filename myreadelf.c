@@ -46,9 +46,9 @@ static uint64_t get_field(size_t *offset, size_t len)
 	return data;
 }
 
-static char *get_symbol_name(struct sym_entry *sym, unsigned int tindex)
+static char *get_symbol_name(uint32_t st_name, unsigned int tindex)
 {
-	return (char *)(mfile + tabs[tindex].strtab_off + sym->st_name);
+	return (char *)(mfile + tabs[tindex].strtab_off + st_name);
 }
 
 static char *find_symbol_by_value(long unsigned int value)
@@ -60,7 +60,7 @@ static char *find_symbol_by_value(long unsigned int value)
 		for (i = 0; i < t->nentries; i++) {
 			struct sym_entry *sym = &t->entries[i];
 			if (sym->st_value == value)
-				return get_symbol_name(sym, tab);
+				return get_symbol_name(sym->st_name, tab);
 
 		}
 		tab++;
@@ -388,7 +388,7 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%d", sym->st_shndx);
 		}
 
-		sym_type = get_symbol_type(sym);
+		sym_type = get_symbol_type(sym->st_info);
 
 		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s   %s\n",
 				i,
@@ -400,7 +400,7 @@ static void show_symbol_tab(unsigned int tindex)
 				sec_rel,
 				strncmp(sym_type, "SECTION", 7) == 0
 					? get_section_name(sym->st_shndx)
-					: get_symbol_name(sym, tindex));
+					: get_symbol_name(sym->st_name, tindex));
 	}
 }
 
@@ -450,9 +450,9 @@ static void show_relocation_sections()
 					entry.r_info >> 32,
 					get_rel_type(entry.r_info & 0xffffffff),
 					sym->st_value,
-					strncmp(get_symbol_type(sym), "SECTION", 7) == 0
+					strncmp(get_symbol_type(sym->st_info), "SECTION", 7) == 0
 						? get_section_name(sym->st_shndx)
-						: get_symbol_name(sym, SYMTAB),
+						: get_symbol_name(sym->st_name, SYMTAB),
 					(entry.r_addend > -1) ? "+" : "",
 					entry.r_addend
 			);
