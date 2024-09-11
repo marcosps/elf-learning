@@ -51,6 +51,9 @@ static char *get_symbol_name(uint32_t st_name, unsigned int tindex)
 	return (char *)(mfile + tabs[tindex].strtab_off + st_name);
 }
 
+#define SYM_FIELD(sym, field) \
+	((struct sym_entry *)sym)->field
+
 static char *find_symbol_by_value(long unsigned int value)
 {
 	int tab = SYMTAB;
@@ -58,10 +61,9 @@ static char *find_symbol_by_value(long unsigned int value)
 		struct sym_tab *t = &tabs[tab];
 		unsigned int i;
 		for (i = 0; i < t->nentries; i++) {
-			struct sym_entry *sym = &t->entries[i];
-			if (sym->st_value == value)
-				return get_symbol_name(sym->st_name, tab);
-
+			void *sym = &t->entries[i];
+			if (SYM_FIELD(sym, st_value) == value)
+				return get_symbol_name(SYM_FIELD(sym, st_name), tab);
 		}
 		tab++;
 	}
@@ -365,13 +367,16 @@ static void show_symbol_tab(unsigned int tindex)
 	printf("\nSymbol Table (.%s) contains %d entries:\n", tabs[tindex].desc, t->nentries);
 	printf("  Num:                Value       Size       Type       Bind   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
-		struct sym_entry *sym = &t->entries[i];
+		void *sym = &t->entries[i];
 		char sec_rel[25] = {};
 		char *sym_type;
 
 		get_symbol(t, i, sym);
 
-		switch (sym->st_shndx) {
+		/* bit enough for 32 and 64bit variants */
+		uint16_t st_shndx = SYM_FIELD(sym, st_shndx);
+
+		switch (st_shndx) {
 		case SHN_ABS:
 			sprintf(sec_rel, "%s", "ABS");
 			break;
@@ -379,28 +384,28 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%s", "UND");
 			break;
 		case SHN_LOOS ... SHN_HIOS:
-			if (sym->st_shndx == SHN_LIVEPATCH)
+			if (st_shndx == SHN_LIVEPATCH)
 				sprintf(sec_rel, "OS (livepatch)");
 			else
-				sprintf(sec_rel, "OS (0x%x)", sym->st_shndx);
+				sprintf(sec_rel, "OS (0x%x)", st_shndx);
 			break;
 		default:
-			sprintf(sec_rel, "%d", sym->st_shndx);
+			sprintf(sec_rel, "%d", st_shndx);
 		}
 
-		sym_type = get_symbol_type(sym->st_info);
+		sym_type = get_symbol_type(SYM_FIELD(sym, st_info));
 
 		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s   %s\n",
 				i,
-				sym->st_value,
-				sym->st_size,
+				SYM_FIELD(sym, st_value),
+				SYM_FIELD(sym, st_size),
 				sym_type,
-				get_symbol_bind(sym->st_info),
-				get_symbol_visibility(sym->st_other),
+				get_symbol_bind(SYM_FIELD(sym, st_info)),
+				get_symbol_visibility(SYM_FIELD(sym, st_other)),
 				sec_rel,
 				strncmp(sym_type, "SECTION", 7) == 0
-					? get_section_name(sym->st_shndx)
-					: get_symbol_name(sym->st_name, tindex));
+					? get_section_name(st_shndx)
+					: get_symbol_name(SYM_FIELD(sym, st_name), tindex));
 	}
 }
 
@@ -438,7 +443,7 @@ static void show_relocation_sections()
 		printf("  Offset        Info          Sym. Index Type                      Sym. Value     Sym. Name + Addend\n");
 		for (j = 0; j < rel_num; j++) {
 			struct rela_entry entry;
-			struct sym_entry *sym;
+			void *sym;
 
 			get_rel_entry(is_rela, she, j, &entry);
 
@@ -449,10 +454,10 @@ static void show_relocation_sections()
 					entry.r_info,
 					entry.r_info >> 32,
 					get_rel_type(entry.r_info & 0xffffffff),
-					sym->st_value,
-					strncmp(get_symbol_type(sym->st_info), "SECTION", 7) == 0
-						? get_section_name(sym->st_shndx)
-						: get_symbol_name(sym->st_name, SYMTAB),
+					SYM_FIELD(sym, st_value),
+					strncmp(get_symbol_type(SYM_FIELD(sym, st_info)), "SECTION", 7) == 0
+						? get_section_name(SYM_FIELD(sym, st_shndx))
+						: get_symbol_name(SYM_FIELD(sym, st_name), SYMTAB),
 					(entry.r_addend > -1) ? "+" : "",
 					entry.r_addend
 			);
