@@ -352,6 +352,18 @@ static void get_symbol(struct sym_tab *t, size_t sym_index, void *entry)
 	memcpy(entry, mfile + pos, sym_size);
 }
 
+static void load_symbol_tab(unsigned int tindex)
+{
+	struct sym_tab *t = tabs[tindex];
+	unsigned int i;
+
+	if (!t || t->nentries == 0)
+		return;
+
+	for (i = 0; i < t->nentries; i++)
+		get_symbol(t, i, &t->entries[i]);
+}
+
 static void show_symbol_tab(unsigned int tindex)
 {
 	struct sym_tab *t = tabs[tindex];
@@ -363,12 +375,10 @@ static void show_symbol_tab(unsigned int tindex)
 	printf("\nSymbol Table (.%s) contains %d entries:\n", tabs[tindex]->desc, t->nentries);
 	printf("  Num:                Value       Size       Type       Bind   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
-		void *sym = &t->entries[i];
 		char sec_rel[25] = {};
 		char *sym_type;
 
-		get_symbol(t, i, sym);
-
+		void *sym = &t->entries[i];
 		/* bit enough for 32 and 64bit variants */
 		uint16_t st_shndx = SYM_FIELD(sym, st_shndx);
 
@@ -514,7 +524,10 @@ int main(int argc, char **argv)
 	show_program_headers();
 	show_section_headers();
 
+	load_symbol_tab(DYNTAB);
 	show_symbol_tab(DYNTAB);
+
+	load_symbol_tab(SYMTAB);
 	show_symbol_tab(SYMTAB);
 
 	show_tracing_fentries();
