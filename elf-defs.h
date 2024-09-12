@@ -269,7 +269,7 @@ enum SymbleTables {
 };
 
 struct sym_tab {
-	int type;
+	int sh_entry;
 	char *desc;
 	unsigned int tab_off;
 	unsigned int tab_len;

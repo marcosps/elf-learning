@@ -281,6 +281,7 @@ static void show_section_headers()
 		} else if (strncmp(sec_name, ".symtab", 7) == 0) {
 			nentries = entry->sh_size / entry->sh_entsize;
 			tabs[SYMTAB] = malloc(sizeof(struct sym_tab) + nentries * sym_size);
+			tabs[SYMTAB]->sh_entry = i;
 			tabs[SYMTAB]->desc = "symtab";
 			tabs[SYMTAB]->tab_off = entry->sh_offset;
 			tabs[SYMTAB]->tab_len = entry->sh_size;
@@ -293,7 +294,8 @@ static void show_section_headers()
 		} else if (strncmp(sec_name, ".dynsym", 7) == 0) {
 			nentries = entry->sh_size / entry->sh_entsize;
 			tabs[DYNTAB] = malloc(sizeof(struct sym_tab) + nentries * sym_size);
-			tabs[DYNTAB]->desc = "dyntab";
+			tabs[DYNTAB]->sh_entry = i;
+			tabs[DYNTAB]->desc = "dynsym";
 			tabs[DYNTAB]->tab_off = entry->sh_offset;
 			tabs[DYNTAB]->tab_len = entry->sh_size;
 			tabs[DYNTAB]->entry_size = entry->sh_entsize;
@@ -375,13 +377,11 @@ static void show_symbol_tab(unsigned int tindex)
 	printf("\nSymbol Table (.%s) contains %d entries:\n", tabs[tindex]->desc, t->nentries);
 	printf("  Num:                Value       Size       Type       Bind   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
-		char sec_rel[25] = {};
-		char *sym_type;
-
 		void *sym = &t->entries[i];
 		/* bit enough for 32 and 64bit variants */
 		uint16_t st_shndx = SYM_FIELD(sym, st_shndx);
 
+		char sec_rel[25] = {};
 		switch (st_shndx) {
 		case SHN_ABS:
 			sprintf(sec_rel, "%s", "ABS");
@@ -399,7 +399,7 @@ static void show_symbol_tab(unsigned int tindex)
 			sprintf(sec_rel, "%d", st_shndx);
 		}
 
-		sym_type = get_symbol_type(SYM_FIELD(sym, st_info));
+		char *sym_type = get_symbol_type(SYM_FIELD(sym, st_info));
 
 		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s   %s\n",
 				i,
@@ -432,15 +432,12 @@ static void show_relocation_sections()
 
 	for (i = 0; i < eh.e_shnum; i++) {
 		size_t j;
-		bool is_rela;
 		size_t rel_num;
 		struct sh_entry *she = &sh_entries[i];
 
-		/* type == 4 means relocation */
-		if (she->sh_type != 4 && she->sh_type != 9)
+		if (she->sh_type != SHT_RELA && she->sh_type != SHT_REL)
 			continue;
 
-		is_rela = she->sh_type == 4;
 		rel_num = she->sh_size / she->sh_entsize;
 
 		printf("\nRelocation section '%s' with %lu entries:\n",
@@ -451,11 +448,22 @@ static void show_relocation_sections()
 			struct rela_entry entry;
 			size_t rela_sym;
 
-			get_rel_entry(is_rela, she, j, &entry);
+			struct sym_tab *tab;
+			int tindex;
+			if (tabs[SYMTAB] && tabs[SYMTAB]->sh_entry == she->sh_link) {
+				tab = tabs[SYMTAB];
+				tindex = SYMTAB;
+			} else {
+				tab = tabs[DYNTAB];
+				tindex = DYNTAB;
+			}
+
+			get_rel_entry(she->sh_type == SHT_RELA, she, j, &entry);
 
 			rela_sym = is64bit ? entry.r_info >> 32 : entry.r_info >> 8;
 
-			void *sym = SYM_OBJ(tabs[SYMTAB], rela_sym);
+			/* sh_link will point to DYNTAB or SYMTAB */
+			void *sym = SYM_OBJ(tab, rela_sym);
 
 			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s %s%ld\n",
 					entry.r_offset,
@@ -465,7 +473,7 @@ static void show_relocation_sections()
 					SYM_FIELD(sym, st_value),
 					strncmp(get_symbol_type(SYM_FIELD(sym, st_info)), "SECTION", 7) == 0
 						? get_section_name(SYM_FIELD(sym, st_shndx))
-						: get_symbol_name(SYM_FIELD(sym, st_name), SYMTAB),
+						: get_symbol_name(SYM_FIELD(sym, st_name), tindex),
 					(entry.r_addend > -1) ? "+" : "",
 					entry.r_addend
 			);
