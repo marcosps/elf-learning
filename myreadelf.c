@@ -293,7 +293,7 @@ static void show_section_headers()
 		} else if (strncmp(sec_name, ".dynsym", 7) == 0) {
 			nentries = entry->sh_size / entry->sh_entsize;
 			tabs[DYNTAB] = malloc(sizeof(struct sym_tab) + nentries * sym_size);
-			tabs[SYMTAB]->desc = "dyntab";
+			tabs[DYNTAB]->desc = "dyntab";
 			tabs[DYNTAB]->tab_off = entry->sh_offset;
 			tabs[DYNTAB]->tab_len = entry->sh_size;
 			tabs[DYNTAB]->entry_size = entry->sh_entsize;
