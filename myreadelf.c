@@ -31,6 +31,8 @@ static size_t patchable_num;
 /* Is 1024 mcount entries enough? */
 static struct patchable_funcs pfuncs[1024];
 
+static uint64_t start_mcount_loc, stop_mcount_loc;
+
 static struct sym_tab *tabs[2];
 
 /* Get value mfile starting from offset + len */
@@ -94,6 +96,25 @@ static void show_tracing_fentries()
 			printf("\nSection %s at offset %lu has no content: sh_size is zero\n",
 					patch_tabs[pf.type], pf.offset);
 		}
+	}
+
+	/*
+	 * The kernel is different, so we need to go through the array that is
+	 * limited by these two symbols. The content is the address of each
+	 * function that is able to be patched/traced/probed/etc.
+	 */
+	if (stop_mcount_loc && start_mcount_loc) {
+		int total = 0;
+		printf("Detected the mcount symbols for Linux kernel. "
+			"Print the addressed of the functions that can be "
+			"traced:\n");
+
+		for (size_t pos = start_mcount_loc; pos < stop_mcount_loc;) {
+			printf("\t%lx\n", get_field(&pos, nbytes));
+			total++;
+		}
+
+		printf("Found %d entries in the mcount space.\n", total);
 	}
 }
 
@@ -362,8 +383,34 @@ static void load_symbol_tab(unsigned int tindex)
 	if (!t || t->nentries == 0)
 		return;
 
-	for (i = 0; i < t->nentries; i++)
+	for (i = 0; i < t->nentries; i++) {
 		get_symbol(t, i, &t->entries[i]);
+
+		void *sym = &t->entries[i];
+
+		char *sym_type = get_symbol_type(SYM_FIELD(sym, st_info));
+
+		/* Search for the mcount_loc symbols, and they are set as NOTYPE */
+		if (strncmp(sym_type, "NOTYPE", 6))
+			continue;
+
+		uint16_t sym_section = SYM_FIELD(sym, st_shndx);
+
+		if (sym_section >= SHN_ABS)
+			continue;
+
+		/* Calculate the offset of the symbol inside the section. */
+		uint64_t sym_offset = (uint64_t)(SYM_FIELD(sym, st_value)) -
+			 	sh_entries[sym_section].sh_addr +
+			 	sh_entries[sym_section].sh_offset;
+
+		char *sym_name = get_symbol_name(SYM_FIELD(sym, st_name), tindex);
+
+		if (strncmp(sym_name, "__stop_mcount_loc", 17) == 0)
+			stop_mcount_loc = sym_offset;
+		else if (strncmp(sym_name, "__start_mcount_loc", 18) == 0)
+			start_mcount_loc = sym_offset;
+	}
 }
 
 static void show_symbol_tab(unsigned int tindex)
