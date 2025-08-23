@@ -448,6 +448,8 @@ static void show_relocation_sections()
 			struct rela_entry entry;
 			size_t rela_sym;
 
+			/* For relocation sections the sh_link field contains
+			 * the index to a symbol table section */
 			struct sym_tab *tab;
 			int tindex;
 			if (tabs[SYMTAB] && tabs[SYMTAB]->sh_entry == she->sh_link) {
@@ -462,7 +464,6 @@ static void show_relocation_sections()
 
 			rela_sym = is64bit ? entry.r_info >> 32 : entry.r_info >> 8;
 
-			/* sh_link will point to DYNTAB or SYMTAB */
 			void *sym = SYM_OBJ(tab, rela_sym);
 
 			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s %s%ld\n",
