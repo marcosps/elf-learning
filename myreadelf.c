@@ -48,6 +48,7 @@ static uint64_t get_field(size_t *offset, size_t len)
 	return data;
 }
 
+/* Return the symbol name by looking at the symbol index inside the SYMTAB */
 static char *get_symbol_name(uint32_t st_name, unsigned int tindex)
 {
 	return (char *)(mfile + tabs[tindex]->strtab_off + st_name);
@@ -60,6 +61,7 @@ static char *get_symbol_name(uint32_t st_name, unsigned int tindex)
 	is64bit ? (void *)&((struct sym_entry_64 *)_tab->entries)[_index] : \
 		  (void *)&((struct sym_entry_32 *)_tab->entries)[_index]
 
+/* Used to sort the SYMTAB symbols by their address ()st_value */
 static int compare_symbols(const void *sym1, const void *sym2)
 {
 	struct sym_entry_64 *s1 = (struct sym_entry_64 *)sym1;
@@ -73,6 +75,7 @@ static int compare_symbols(const void *sym1, const void *sym2)
 	return 0;
 }
 
+/* Return the symbol from symbol tab using it's address (st_value) */
 static char *find_symbol_by_value(uint64_t value)
 {
 	/* Search for the symbol name */
@@ -93,6 +96,17 @@ static char *find_symbol_by_value(uint64_t value)
 	return get_symbol_name(res->st_name, SYMTAB);
 }
 
+/**
+ * Print all entries in specific ELF sections known to contain symbols that
+ * are able to be patched. This involves the sections like
+ * __patchable_function_entries and __mcount_loc, for userspace programs.
+ *
+ * This function is also able to print all addresses and symbol names from
+ * the current __start_mcount_loc and __stop_mcount_loc, which contain all
+ * the places inside the kernel that are able to be live patched. The content
+ * of this memory region is an array of addresses, and using these addresses
+ * it's possible to grab the symbol names.
+ */
 static void show_tracing_fentries()
 {
 	for (size_t i = 0; i < patchable_num; i++) {
@@ -142,6 +156,10 @@ static void show_tracing_fentries()
 	}
 }
 
+/**
+ * Parse the first ELF header section, containing some basic information about
+ * the ELF file being parsed.
+ */
 static void get_eh_fields()
 {
 	size_t pos = 16;
@@ -191,6 +209,7 @@ static void get_eh_fields()
 	printf("  Section header string table index: %d\n", eh.e_shstrndx);
 }
 
+/* Sets the flags for a specific program header */
 static void get_prog_flags(uint64_t flags, char *flag_buf)
 {
 	flag_buf[0] = flags & 0x4 ? 'R' : ' ';
@@ -198,6 +217,7 @@ static void get_prog_flags(uint64_t flags, char *flag_buf)
 	flag_buf[2] = flags & 0x1 ? 'E' : ' ';
 }
 
+/* Get all fields from a program header */
 static void get_program_header(size_t ph_index, struct ph_entry *entry)
 {
 	size_t pos = eh.e_phoff + (ph_index * eh.e_phentsize);
@@ -222,6 +242,7 @@ static void get_program_header(size_t ph_index, struct ph_entry *entry)
 	entry->p_align = get_field(&pos, nbytes);
 }
 
+/* Print the information about all the program headers */
 static void show_program_headers()
 {
 	int i;
@@ -265,6 +286,7 @@ static void show_program_headers()
 	printf("\n");
 }
 
+/* Set data from a section header from the ELF file */
 static void get_section_header(size_t sh_index, struct sh_entry *entry)
 {
 	size_t pos = eh.e_shoff + (sh_index * eh.e_shentsize);
@@ -281,6 +303,10 @@ static void get_section_header(size_t sh_index, struct sh_entry *entry)
 	entry->sh_entsize = get_field(&pos, nbytes);
 }
 
+/**
+ * Find the name of a section by looking at the section header table entry
+ * (e_shstrndx) using the section header index.
+ */
 static char *get_section_name(uint64_t sec_index)
 {
 	return (char *)(mfile +
@@ -288,7 +314,11 @@ static char *get_section_name(uint64_t sec_index)
 			sh_entries[sec_index].sh_name);
 }
 
-/* sh_entries will be allocated by alloc_header_tables */
+/**
+ * Iterate and print information about section headers. When a symbol table is
+ * found it also allocated memory for all the symbol that will be parsed
+ * later.
+ */
 static void show_section_headers()
 {
 	struct sh_entry *entry;
@@ -393,12 +423,17 @@ static void show_modinfo()
 	} while (cur_len < modinfo_end);
 }
 
+/**
+ * Copy the symbol data from the ELF file using the symbol size and the file
+ * offset regarding the symbol info.
+ */
 static void get_symbol(struct sym_tab *t, size_t sym_index, void *entry)
 {
 	size_t pos = t->tab_off + (sym_index * t->entry_size);
 	memcpy(entry, mfile + pos, sym_size);
 }
 
+/* Populate the symbol tab, being SYMTAB or DYNTAB */
 static void load_symbol_tab(unsigned int tindex)
 {
 	struct sym_tab *t = tabs[tindex];
@@ -437,6 +472,7 @@ static void load_symbol_tab(unsigned int tindex)
 	}
 }
 
+/* Print information about a symbol tab, being SYMTAB or DYNTAB */
 static void show_symbol_tab(unsigned int tindex)
 {
 	struct sym_tab *t = tabs[tindex];
@@ -486,6 +522,7 @@ static void show_symbol_tab(unsigned int tindex)
 	}
 }
 
+/* Get relocation entry informantion from the ELF file */
 static void get_rel_entry(bool rela, struct sh_entry *she, size_t rel_index,
 				struct rela_entry *rel)
 {
@@ -497,6 +534,7 @@ static void get_rel_entry(bool rela, struct sh_entry *she, size_t rel_index,
 		memcpy(rel, mfile + pos, 2 * nbytes);
 }
 
+/* Print all the entries in the relocation table */
 static void show_relocation_sections()
 {
 	int i;
@@ -568,7 +606,10 @@ static void alloc_header_tables()
 	}
 }
 
-/* Called before searching for symbol names of traced functions */
+/**
+ * Sort all the symbol in SYMTAB. This is necessary because the symbols are
+ * searched on using a binary search later on.
+ */
 static void sort_symbols()
 {
 	for (int i = SYMTAB; i <= DYNTAB; i++) {
