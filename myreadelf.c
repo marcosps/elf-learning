@@ -49,9 +49,9 @@ static uint64_t get_field(size_t *offset, size_t len)
 }
 
 /* Return the symbol name by looking at the symbol index inside the SYMTAB */
-static char *get_symbol_name(uint32_t st_name, unsigned int tindex)
+static char *get_symbol_name(uint32_t st_name)
 {
-	return (char *)(mfile + tabs[tindex]->strtab_off + st_name);
+	return (char *)(mfile + tabs[SYMTAB]->strtab_off + st_name);
 }
 
 #define SYM_FIELD(sym, field) \
@@ -88,12 +88,10 @@ static char *find_symbol_by_value(uint64_t value)
 	              sizeof(struct sym_entry_64),
 		              compare_symbols);
 
-	if (!res) {
-		printf("XXX couldnt find name for value: %lx\n", value);
+	if (!res)
 		return NULL;
-	}
 
-	return get_symbol_name(res->st_name, SYMTAB);
+	return get_symbol_name(res->st_name);
 }
 
 /**
@@ -463,7 +461,7 @@ static void load_symbol_tab(unsigned int tindex)
 			 	sh_entries[sym_section].sh_addr +
 			 	sh_entries[sym_section].sh_offset;
 
-		char *sym_name = get_symbol_name(SYM_FIELD(sym, st_name), tindex);
+		char *sym_name = get_symbol_name(SYM_FIELD(sym, st_name));
 
 		if (strncmp(sym_name, "__stop_mcount_loc", 17) == 0)
 			stop_mcount_loc = sym_offset;
@@ -481,7 +479,7 @@ static void show_symbol_tab(unsigned int tindex)
 	if (!t || t->nentries == 0)
 		return;
 
-	printf("\nSymbol Table (.%s) contains %d entries:\n", tabs[tindex]->desc, t->nentries);
+	printf("\nSymbol Table (.%s) contains %d entries:\n", t->desc, t->nentries);
 	printf("  Num:                Value       Size       Type       Bind   Visibility   RelToSection   Name\n");
 	for (i = 0; i < t->nentries; i++) {
 		void *sym = &t->entries[i];
@@ -518,7 +516,7 @@ static void show_symbol_tab(unsigned int tindex)
 				sec_rel,
 				strncmp(sym_type, "SECTION", 7) == 0
 					? get_section_name(st_shndx)
-					: get_symbol_name(SYM_FIELD(sym, st_name), tindex));
+					: get_symbol_name(SYM_FIELD(sym, st_name)));
 	}
 }
 
@@ -560,13 +558,10 @@ static void show_relocation_sections()
 			/* For relocation sections the sh_link field contains
 			 * the index to a symbol table section */
 			struct sym_tab *tab;
-			int tindex;
 			if (tabs[SYMTAB] && tabs[SYMTAB]->sh_entry == she->sh_link) {
 				tab = tabs[SYMTAB];
-				tindex = SYMTAB;
 			} else {
 				tab = tabs[DYNTAB];
-				tindex = DYNTAB;
 			}
 
 			get_rel_entry(she->sh_type == SHT_RELA, she, j, &entry);
@@ -583,7 +578,7 @@ static void show_relocation_sections()
 					SYM_FIELD(sym, st_value),
 					strncmp(get_symbol_type(SYM_FIELD(sym, st_info)), "SECTION", 7) == 0
 						? get_section_name(SYM_FIELD(sym, st_shndx))
-						: get_symbol_name(SYM_FIELD(sym, st_name), tindex),
+						: get_symbol_name(SYM_FIELD(sym, st_name)),
 					(entry.r_addend > -1) ? "+" : "",
 					entry.r_addend
 			);
@@ -612,13 +607,11 @@ static void alloc_header_tables()
  */
 static void sort_symbols()
 {
-	for (int i = SYMTAB; i <= DYNTAB; i++) {
-		if (!tabs[i] || tabs[i]->nentries == 0)
-			continue;
+	if (!tabs[SYMTAB] || tabs[SYMTAB]->nentries == 0)
+		return;
 
-		qsort(tabs[i]->entries, tabs[i]->nentries,
-		      sizeof(struct sym_entry_64), compare_symbols);
-	}
+	qsort(tabs[SYMTAB]->entries, tabs[SYMTAB]->nentries,
+	      sizeof(struct sym_entry_64), compare_symbols);
 }
 
 static void release_header_tables()
