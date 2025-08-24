@@ -277,7 +277,7 @@ struct sym_tab {
 	unsigned int strtab_off;
 	unsigned int strtab_len;
 	unsigned int nentries;
-	void *entries[] __attribute__((counted_by(nentries)));
+	struct sym_entry_64 entries[] __attribute__((counted_by(nentries)));
 };
 
 struct rela_entry {

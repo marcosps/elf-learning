@@ -448,7 +448,7 @@ static void show_symbol_tab(unsigned int tindex)
 
 		char *sym_type = get_symbol_type(SYM_FIELD(sym, st_info));
 
-		printf("%5d: %020lx %10lu %10s %10s   %10s   %12s   %s\n",
+		printf("%5d: %010lx %10lu %10s %10s   %10s   %12s   %s\n",
 				i,
 				SYM_FIELD(sym, st_value),
 				SYM_FIELD(sym, st_size),
