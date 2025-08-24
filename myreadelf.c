@@ -60,20 +60,37 @@ static char *get_symbol_name(uint32_t st_name, unsigned int tindex)
 	is64bit ? (void *)&((struct sym_entry_64 *)_tab->entries)[_index] : \
 		  (void *)&((struct sym_entry_32 *)_tab->entries)[_index]
 
-static char *find_symbol_by_value(long unsigned int value)
+static int compare_symbols(const void *sym1, const void *sym2)
 {
-	int tab = SYMTAB;
-	while (tab <= DYNTAB) {
-		struct sym_tab *t = tabs[tab];
-		unsigned int i;
-		for (i = 0; i < t->nentries; i++) {
-			void *sym = &t->entries[i];
-			if (SYM_FIELD(sym, st_value) == value)
-				return get_symbol_name(SYM_FIELD(sym, st_name), tab);
-		}
-		tab++;
+	struct sym_entry_64 *s1 = (struct sym_entry_64 *)sym1;
+	struct sym_entry_64 *s2 = (struct sym_entry_64 *)sym2;
+
+	if (s1->st_value < s2->st_value)
+		return -1;
+	if (s1->st_value > s2->st_value)
+		return 1;
+
+	return 0;
+}
+
+static char *find_symbol_by_value(uint64_t value)
+{
+	/* Search for the symbol name */
+	struct sym_entry_64 key, *res;
+	key.st_value = value;
+
+	res = bsearch(&key,
+	              tabs[SYMTAB]->entries,
+	              tabs[SYMTAB]->nentries,
+	              sizeof(struct sym_entry_64),
+		              compare_symbols);
+
+	if (!res) {
+		printf("XXX couldnt find name for value: %lx\n", value);
+		return NULL;
 	}
-	return NULL;
+
+	return get_symbol_name(res->st_name, SYMTAB);
 }
 
 static void show_tracing_fentries()
@@ -89,7 +106,7 @@ static void show_tracing_fentries()
 
 			while (pf.offset < end) {
 				/* each pointer has 8 bytes */
-				unsigned long p = get_field(&pf.offset, data_len);
+				uint64_t p = get_field(&pf.offset, data_len);
 				printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
 			}
 		} else {
@@ -105,12 +122,19 @@ static void show_tracing_fentries()
 	 */
 	if (stop_mcount_loc && start_mcount_loc) {
 		int total = 0;
-		printf("Detected the mcount symbols for Linux kernel. "
-			"Print the addressed of the functions that can be "
+		printf("\nDetected the mcount symbols for Linux kernel. "
+			"Printing the addresses of the functions that can be "
 			"traced:\n");
 
 		for (size_t pos = start_mcount_loc; pos < stop_mcount_loc;) {
-			printf("\t%lx\n", get_field(&pos, nbytes));
+			uint64_t sym_addr = get_field(&pos, nbytes);
+
+			/* Some symbols have addr as 0, so just skip them */
+			if (sym_addr == 0)
+				continue;
+
+			printf("\t%lx %s\n", sym_addr,
+					   find_symbol_by_value(sym_addr));
 			total++;
 		}
 
@@ -544,6 +568,18 @@ static void alloc_header_tables()
 	}
 }
 
+/* Called before searching for symbol names of traced functions */
+static void sort_symbols()
+{
+	for (int i = SYMTAB; i <= DYNTAB; i++) {
+		if (!tabs[i] || tabs[i]->nentries == 0)
+			continue;
+
+		qsort(tabs[i]->entries, tabs[i]->nentries,
+		      sizeof(struct sym_entry_64), compare_symbols);
+	}
+}
+
 static void release_header_tables()
 {
 	free(sh_entries);
@@ -585,6 +621,8 @@ int main(int argc, char **argv)
 
 	load_symbol_tab(SYMTAB);
 	show_symbol_tab(SYMTAB);
+
+	sort_symbols();
 
 	show_tracing_fentries();
 
