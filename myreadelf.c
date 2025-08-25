@@ -585,7 +585,7 @@ static void show_relocation_sections()
 
 			void *sym = SYM_OBJ(tab, rela_sym);
 
-			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s %s%ld\n",
+			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s %s%lx\n",
 					entry.r_offset,
 					entry.r_info,
 					rela_sym,
