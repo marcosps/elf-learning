@@ -671,11 +671,11 @@ int main(int argc, char **argv)
 	load_symbol_tab(SYMTAB);
 	show_symbol_tab(SYMTAB);
 
+	show_relocation_sections();
+
 	sort_symbols();
 
 	show_tracing_fentries();
-
-	show_relocation_sections();
 
 	show_modinfo();
 
