@@ -389,7 +389,7 @@ static void show_section_headers()
 			patchable_num++;
 		}
 
-		printf("  [%4d]   %-30s   %-16s   %016d   %-x\n"
+		printf("  [%4d]   %-30s   %-16s   %016x   %x\n"
 		       "           %030x   %016d   %-5s   %-4d   %-4d   %-d\n",
 				i,
 				sec_name,
