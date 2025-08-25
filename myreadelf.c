@@ -116,6 +116,19 @@ static void show_tracing_fentries()
 			printf("\nFound %lu traceable symbol(s) on section %s, starting on offset %lx:\n",
 					nentries, patch_tabs[pf.type], pf.offset);
 
+			if (modinfo_off != 0) {
+				printf("Detected a kernel module.\n"
+				       "The %s table will be empty at compilation time,\n"
+				       "since the exact position of the symbols "
+				       "isn't known until relocation is done by\n"
+				       "the kernel when the module is loaded. "
+				       "Since ftrace needs the address of the\n"
+				       "funtions, there is nothing to be right now.\n"
+				       "Skipping the entries\n"
+				       "\n", patch_tabs[pf.type]);
+				continue;
+			}
+
 			while (pf.offset < end) {
 				/* each pointer has 8 bytes */
 				uint64_t p = get_field(&pf.offset, data_len);
