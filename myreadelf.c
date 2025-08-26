@@ -585,7 +585,7 @@ static void show_relocation_sections()
 
 			void *sym = SYM_OBJ(tab, rela_sym);
 
-			printf("  %012lx  %012lx  %10lu %-25s %012lx   %s %s%lx\n",
+			printf("  %012lx  %012lx  %10lx %-25s %012lx   %s %s %llx\n",
 					entry.r_offset,
 					entry.r_info,
 					rela_sym,
@@ -594,8 +594,8 @@ static void show_relocation_sections()
 					strncmp(get_symbol_type(SYM_FIELD(sym, st_info)), "SECTION", 7) == 0
 						? get_section_name(SYM_FIELD(sym, st_shndx))
 						: get_symbol_name(SYM_FIELD(sym, st_name)),
-					(entry.r_addend > -1) ? "+" : "",
-					entry.r_addend
+					(entry.r_addend > -1) ? "+" : "-",
+					llabs(entry.r_addend)
 			);
 		}
 	}
