@@ -393,16 +393,27 @@ static void show_section_headers()
 		} else if (strncmp(sec_name, ".dynstr", 7) == 0) {
 			tabs[DYNTAB]->strtab_off = entry->sh_offset;
 			tabs[DYNTAB]->strtab_len = entry->sh_size;
+
 		} else if (strncmp(sec_name, "__patchable_function_entries", 28) == 0) {
 			pfuncs[patchable_num].type = PATCHABLE_FUNCTION_ENTRIES;
 			pfuncs[patchable_num].offset = entry->sh_offset,
 			pfuncs[patchable_num].len = entry->sh_size;
 			patchable_num++;
+
+		} else if (strncmp(sec_name, ".rela__patchable_function_entries", 33) == 0) {
+			/* should be related to the last added patchable section */
+			pfuncs[patchable_num-1].rela_she_index = i;
+
 		} else if (strncmp(sec_name, "__mcount_loc", 12) == 0) {
+			/* should be related to the last added mcount section */
 			pfuncs[patchable_num].type = MCOUNT_LOC;
 			pfuncs[patchable_num].offset = entry->sh_offset,
 			pfuncs[patchable_num].len = entry->sh_size;
 			patchable_num++;
+
+		} else if (strncmp(sec_name, ".rela__mcount_loc", 17) == 0) {
+			pfuncs[patchable_num-1].rela_she_index = i;
+
 		}
 
 		printf("  [%4d]   %-30s   %-16s   %016x   %x\n"

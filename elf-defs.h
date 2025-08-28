@@ -300,6 +300,7 @@ struct patchable_funcs {
 	int type;
 	unsigned long offset;
 	unsigned int len;
+	size_t rela_she_index;
 };
 
 /*
