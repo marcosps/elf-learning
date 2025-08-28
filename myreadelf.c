@@ -379,6 +379,7 @@ static void show_section_headers()
 		} else if (strncmp(sec_name, ".strtab", 7) == 0) {
 			tabs[SYMTAB]->strtab_off = entry->sh_offset;
 			tabs[SYMTAB]->strtab_len = entry->sh_size;
+
 		} else if (strncmp(sec_name, ".dynsym", 7) == 0) {
 			nentries = entry->sh_size / entry->sh_entsize;
 			tabs[DYNTAB] = malloc(sizeof(struct sym_tab) + nentries * sym_size);
@@ -591,7 +592,7 @@ static void show_relocation_sections()
 					rela_sym,
 					get_rel_type(entry.r_info & 0xffffffff),
 					SYM_FIELD(sym, st_value),
-					strncmp(get_symbol_type(SYM_FIELD(sym, st_info)), "SECTION", 7) == 0
+					(int)(SYM_FIELD(sym, st_info)) == STT_SECTION
 						? get_section_name(SYM_FIELD(sym, st_shndx))
 						: get_symbol_name(SYM_FIELD(sym, st_name)),
 					(entry.r_addend > -1) ? "+" : "-",
