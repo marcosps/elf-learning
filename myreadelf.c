@@ -95,6 +95,73 @@ static char *find_symbol_by_value(uint64_t value)
 }
 
 /**
+ * Find the name of a section by looking at the section header table entry
+ * (e_shstrndx) using the section header index.
+ */
+static char *get_section_name(uint64_t sec_index)
+{
+	return (char *)(mfile +
+			sh_entries[eh.e_shstrndx].sh_offset +
+			sh_entries[sec_index].sh_name);
+}
+
+/* Get relocation entry informantion from the ELF file */
+static void get_rel_entry(bool rela, struct sh_entry *she, size_t rel_index,
+				struct rela_entry *rel)
+{
+	size_t pos = she->sh_offset + (rel_index * she->sh_entsize);
+
+	if (rela)
+		memcpy(rel, mfile + pos, 3 * nbytes);
+	else
+		memcpy(rel, mfile + pos, 2 * nbytes);
+}
+
+/* Expects the symtab to be ordered */
+static void find_symbol_by_addr_and_sec(uint64_t addr, size_t sec)
+{
+	size_t end = tabs[SYMTAB]->nentries;
+
+	for (size_t i = 0; i < end; i++) {
+		struct sym_entry_64 *sym = &tabs[SYMTAB]->entries[i];
+
+		if (sym->st_value < addr)
+			continue;
+
+		if (sym->st_value > addr)
+			break;
+
+		if (sym->st_shndx < sec)
+			continue;
+
+		if (sym->st_shndx > sec)
+			break;
+
+		printf("\t%lx %s (%s)\n", sym->st_value,
+		       get_symbol_name(sym->st_name),
+		       get_section_name(sym->st_shndx));
+	}
+}
+
+static void process_mcount_rela(size_t sec_index) {
+	struct sh_entry *she = &sh_entries[sec_index];
+	size_t rel_num = she->sh_size / she->sh_entsize;
+
+	printf("We can have more entries than expected because opf symbol alias\n");
+	for (size_t i = 0; i < rel_num; i++) {
+		struct rela_entry entry;
+		size_t sym_section;
+		int64_t sym_addr;
+
+		get_rel_entry(she->sh_type == SHT_RELA, she, i, &entry);
+		sym_section = is64bit ? entry.r_info >> 32 : entry.r_info >> 8;
+		sym_addr = entry.r_addend;
+
+		find_symbol_by_addr_and_sec(sym_addr, sym_section);
+	}
+}
+
+/**
  * Print all entries in specific ELF sections known to contain symbols that
  * are able to be patched. This involves the sections like
  * __patchable_function_entries and __mcount_loc, for userspace programs.
@@ -116,23 +183,22 @@ static void show_tracing_fentries()
 			printf("\nFound %lu traceable symbol(s) on section %s, starting on offset %lx:\n",
 					nentries, patch_tabs[pf.type], pf.offset);
 
+			/*
+			 * Detected a kernel module. The mcount/pactchable tables
+			 * will be empty at compilation time, since the exact
+			 * position of the symbols isn't known until relocation
+			 * is done by the kernel when the module is loaded.
+			 * Since ftrace needs the address of the funtions, there
+			 * is nothing to be right now.
+			 */
 			if (modinfo_off != 0) {
-				printf("Detected a kernel module.\n"
-				       "The %s table will be empty at compilation time,\n"
-				       "since the exact position of the symbols "
-				       "isn't known until relocation is done by\n"
-				       "the kernel when the module is loaded. "
-				       "Since ftrace needs the address of the\n"
-				       "funtions, there is nothing to be right now.\n"
-				       "Skipping the entries\n"
-				       "\n", patch_tabs[pf.type]);
-				continue;
-			}
-
-			while (pf.offset < end) {
-				/* each pointer has 8 bytes */
-				uint64_t p = get_field(&pf.offset, data_len);
-				printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
+				process_mcount_rela(pf.rela_she_index);
+			} else {
+				while (pf.offset < end) {
+					/* each pointer has 8 bytes */
+					uint64_t p = get_field(&pf.offset, data_len);
+					printf("  %s\t\t%lx\n", find_symbol_by_value(p), p);
+				}
 			}
 		} else {
 			printf("\nSection %s at offset %lu has no content: sh_size is zero\n",
@@ -314,17 +380,6 @@ static void get_section_header(size_t sh_index, struct sh_entry *entry)
 	entry->sh_info = get_field(&pos, 4);
 	entry->sh_addralign = get_field(&pos, nbytes);
 	entry->sh_entsize = get_field(&pos, nbytes);
-}
-
-/**
- * Find the name of a section by looking at the section header table entry
- * (e_shstrndx) using the section header index.
- */
-static char *get_section_name(uint64_t sec_index)
-{
-	return (char *)(mfile +
-			sh_entries[eh.e_shstrndx].sh_offset +
-			sh_entries[sec_index].sh_name);
 }
 
 /**
@@ -545,18 +600,6 @@ static void show_symbol_tab(unsigned int tindex)
 					? get_section_name(st_shndx)
 					: get_symbol_name(SYM_FIELD(sym, st_name)));
 	}
-}
-
-/* Get relocation entry informantion from the ELF file */
-static void get_rel_entry(bool rela, struct sh_entry *she, size_t rel_index,
-				struct rela_entry *rel)
-{
-	size_t pos = she->sh_offset + (rel_index * she->sh_entsize);
-
-	if (rela)
-		memcpy(rel, mfile + pos, 3 * nbytes);
-	else
-		memcpy(rel, mfile + pos, 2 * nbytes);
 }
 
 /* Print all the entries in the relocation table */
