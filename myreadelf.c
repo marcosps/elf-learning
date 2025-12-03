@@ -213,9 +213,12 @@ static void show_tracing_fentries()
 	 */
 	if (stop_mcount_loc && start_mcount_loc) {
 		int zeroed_total = 0;
-		printf("\nFound (%ld) mcount symbols for Linux kernel. "
-			"Printing the addresses of the functions that can be "
-			"traced:\n", (stop_mcount_loc - start_mcount_loc) / nbytes);
+		printf("\nFound (%ld) mcount symbols for Linux kernel.\n"
+		       "Starting at %lx (%ld) and stopping at %lx (%ld).\n"
+		       "Printing the addresses of the functions that can be "
+		       "traced:\n",
+		       (stop_mcount_loc - start_mcount_loc) / nbytes,
+		       start_mcount_loc, start_mcount_loc, stop_mcount_loc, stop_mcount_loc);
 
 		for (size_t pos = start_mcount_loc; pos < stop_mcount_loc;) {
 			uint64_t sym_addr = get_field(&pos, nbytes);
