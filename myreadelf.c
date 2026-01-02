@@ -88,8 +88,16 @@ static char *find_symbol_by_value(uint64_t value)
 	              sizeof(struct sym_entry_64),
 		              compare_symbols);
 
-	if (!res)
-		return NULL;
+	/* Check if the function has ENDBR instruction on newer kernels as well */
+	if (!res) {
+		key.st_value = value - 4;
+		res = bsearch(&key, tabs[SYMTAB]->entries,
+		            tabs[SYMTAB]->nentries,
+			    sizeof(struct sym_entry_64), compare_symbols);
+
+		if (!res)
+			return NULL;
+	}
 
 	return get_symbol_name(res->st_name);
 }
